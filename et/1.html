@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>E.T. Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script>
+    // シーン、カメラ、レンダラーのセットアップ
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // ライト
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(0, 1, 1).normalize();
+    scene.add(light);
+
+    // 地面
+    const groundGeometry = new THREE.PlaneGeometry(100, 100);
+    const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x8B4513 });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    // プレイヤー (E.T.)
+    const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
+    const playerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const player = new THREE.Mesh(playerGeometry, playerMaterial);
+    player.position.y = 1;
+    scene.add(player);
+
+    // ピット
+    const pits = [];
+    for (let i = 0; i < 5; i++) {
+        const pitGeometry = new THREE.BoxGeometry(5, 1, 5);
+        const pitMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const pit = new THREE.Mesh(pitGeometry, pitMaterial);
+        pit.position.set(
+            Math.random() * 80 - 40,
+            -0.5,
+            Math.random() * 80 - 40
+        );
+        scene.add(pit);
+        pits.push(pit);
+    }
+
+    // アイテム
+    const items = [];
+    for (let i = 0; i < 3; i++) {
+        const itemGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+        const itemMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const item = new THREE.Mesh(itemGeometry, itemMaterial);
+        item.position.set(
+            Math.random() * 80 - 40,
+            0.5,
+            Math.random() * 80 - 40
+        );
+        scene.add(item);
+        items.push(item);
+    }
+
+    // カメラ位置
+    camera.position.set(0, 10, 15);
+    camera.lookAt(player.position);
+
+    // キー入力
+    const keys = {};
+    document.addEventListener('keydown', (e) => keys[e.key] = true);
+    document.addEventListener('keyup', (e) => keys[e.key] = false);
+
+    // スコア
+    let score = 0;
+
+    // ゲームループ
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // プレイヤー移動
+        const speed = 0.2;
+        if (keys['ArrowUp'] || keys['w']) player.position.z -= speed;
+        if (keys['ArrowDown'] || keys['s']) player.position.z += speed;
+        if (keys['ArrowLeft'] || keys['a']) player.position.x -= speed;
+        if (keys['ArrowRight'] || keys['d']) player.position.x += speed;
+
+        // ピットとの衝突判定
+        pits.forEach(pit => {
+            if (player.position.distanceTo(pit.position) < 3) {
+                alert(`Game Over! Score: ${score}`);
+                player.position.set(0, 1, 0);
+                score = 0;
+            }
+        });
+
+        // アイテムとの衝突判定
+        items.forEach((item, index) => {
+            if (player.position.distanceTo(item.position) < 1.5) {
+                scene.remove(item);
+                items.splice(index, 1);
+                score += 10;
+                
+                // 新しいアイテムを追加
+                const newItem = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.5, 32, 32),
+                    new THREE.MeshBasicMaterial({ color: 0xffff00 })
+                );
+                newItem.position.set(
+                    Math.random() * 80 - 40,
+                    0.5,
+                    Math.random() * 80 - 40
+                );
+                scene.add(newItem);
+                items.push(newItem);
+            }
+        });
+
+        // カメラ追従
+        camera.position.x = player.position.x;
+        camera.position.z = player.position.z + 15;
+        camera.lookAt(player.position);
+
+        renderer.render(scene, camera);
+    }
+
+    // ウィンドウリサイズ対応
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
+</body>
+</html>

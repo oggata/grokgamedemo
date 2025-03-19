@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Star Fox-like 3D Shooter with WebXR AR</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #score { 
+            position: absolute; 
+            top: 10px; 
+            left: 10px; 
+            color: white; 
+            font-family: Arial; 
+            font-size: 24px; 
+        }
+        #ar-button { 
+            position: absolute; 
+            bottom: 20px; 
+            left: 50%; 
+            transform: translateX(-50%);
+            padding: 10px 20px; 
+            font-size: 16px; 
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Score: 0</div>
+    <button id="ar-button">Start AR</button>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@latest/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@latest/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+        // シーンの設定
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // ライトの追加（ARで視認性向上）
+        const light = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(light);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(0, 1, 0);
+        scene.add(directionalLight);
+
+        // 自機の作成
+        const playerGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const playerMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+        const player = new THREE.Mesh(playerGeometry, playerMaterial);
+        scene.add(player);
+        player.position.set(0, 0, -2); // カメラの前方に配置
+
+        // ゲーム変数
+        let bullets = [];
+        let enemies = [];
+        let score = 0;
+        const scoreElement = document.getElementById('score');
+        const moveSpeed = 0.05;
+        const bulletSpeed = 0.2;
+        const enemySpeed = 0.05;
+
+        // キー入力の管理
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.code] = true);
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        // 弾丸の作成
+        function createBullet() {
+            const bulletGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+            const bulletMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+            const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+            bullet.position.copy(player.position);
+            scene.add(bullet);
+            bullets.push(bullet);
+        }
+
+        // 敵の作成
+        function createEnemy() {
+            const enemyGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+            const enemyMaterial = new THREE.MeshPhongMaterial({ color: 0xff00ff });
+            const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+            enemy.position.set(
+                Math.random() * 10 - 5,
+                Math.random() * 10 - 5,
+                -20
+            );
+            scene.add(enemy);
+            enemies.push(enemy);
+        }
+
+        // 衝突判定
+        function checkCollisions() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    const distance = enemies[i].position.distanceTo(bullets[j].position);
+                    if (distance < 0.6) {
+                        scene.remove(enemies[i]);
+                        scene.remove(bullets[j]);
+                        enemies.splice(i, 1);
+                        bullets.splice(j, 1);
+                        score += 1;
+                        scoreElement.textContent = `Score: ${score}`;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // アニメーションループ
+        function animate() {
+            renderer.setAnimationLoop(() => {
+                // 自機の移動
+                if (keys['ArrowUp']) player.position.y += moveSpeed;
+                if (keys['ArrowDown']) player.position.y -= moveSpeed;
+                if (keys['ArrowLeft']) player.position.x -= moveSpeed;
+                if (keys['ArrowRight']) player.position.x += moveSpeed;
+
+                // 弾丸の発射
+                if (keys['Space']) {
+                    if (!keys['SpacePressed']) {
+                        createBullet();
+                        keys['SpacePressed'] = true;
+                    }
+                } else {
+                    keys['SpacePressed'] = false;
+                }
+
+                // 弾丸の移動
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    bullets[i].position.z -= bulletSpeed;
+                    if (bullets[i].position.z < -30) {
+                        scene.remove(bullets[i]);
+                        bullets.splice(i, 1);
+                    }
+                }
+
+                // 敵の移動と生成
+                if (Math.random() < 0.02) createEnemy();
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    enemies[i].position.z += enemySpeed;
+                    if (enemies[i].position.z > 0) {
+                        scene.remove(enemies[i]);
+                        enemies.splice(i, 1);
+                    }
+                }
+
+                // 衝突判定
+                checkCollisions();
+
+                renderer.render(scene, camera);
+            });
+        }
+
+        // ARボタンの設定
+        document.getElementById('ar-button').addEventListener('click', () => {
+            document.getElementById('ar-button').style.display = 'none';
+            renderer.xr.setReferenceSpaceType('local');
+            renderer.xr.addEventListener('sessionstart', () => {
+                camera.position.set(0, 1.6, 0); // 現実世界での視点調整
+                player.position.set(0, 0, -2);
+            });
+        });
+
+        // WebXRのARボタン（Three.js公式）
+        document.body.appendChild(
+            ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] })
+        );
+
+        // ウィンドウリサイズ対応
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
