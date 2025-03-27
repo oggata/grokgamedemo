@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>探偵シミュレーションゲーム（GLB版＋照明）</title>
+    <title>探偵シミュレーションゲーム（完全版）</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a1a1a; }
         canvas { display: block; }
@@ -42,7 +42,6 @@
     </div>
     <div id="choices"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script>
         // Three.jsのセットアップ
         const scene = new THREE.Scene();
@@ -51,54 +50,38 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // 照明の追加
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // 環境光（白色、強度0.5）
-        scene.add(ambientLight);
+        // サイバーシティのオブジェクト
+        const groundGeometry = new THREE.PlaneGeometry(50, 50);
+        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
 
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // 指向性光（白色、強度1.0）
-        directionalLight.position.set(0, 10, 10); // 上方から照らす
-        directionalLight.target.position.set(0, 0, 0); // シーン中央をターゲット
-        scene.add(directionalLight);
-        scene.add(directionalLight.target);
+        const bodyGeometry = new THREE.BoxGeometry(2, 0.2, 1);
+        const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.set(0, 0.1, 0);
+        scene.add(body);
 
-        // GLBファイルのパスをまとめる
-        const GLB_PATHS = {
-            ground: './glb/103ff4831525_abc5248f22c2_Western_style_room_.glb',
-            body: './glb/62a0e1712e9f_514d24f0b227_A_lying_human_corps.glb',
-            clue1: './glb/f439041aaa7c_0aa31b6b0fa3_knife__3d_asset_0_g.glb',
-            clue2: './glb/f439041aaa7c_0aa31b6b0fa3_knife__3d_asset_0_g.glb',
-            witness1: './glb/467d4b0d264e_ec7833cecb55_Hooded_Man__3d_asse.glb',
-            witness2: './glb/eff7ce06f532_93508fd98763_Elderly_man_in_whee.glb'
-        };
+        const clueGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const clueMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const clue1 = new THREE.Mesh(clueGeometry, clueMaterial);
+        clue1.position.set(2, 0.25, 1);
+        scene.add(clue1);
 
-        // GLTFLoaderのインスタンス
-        const loader = new THREE.GLTFLoader();
+        const clue2 = new THREE.Mesh(clueGeometry, clueMaterial);
+        clue2.position.set(-1, 0.25, 2);
+        scene.add(clue2);
 
-        // オブジェクトの読み込み関数
-        function loadGLB(path, position, scale, rotationX = 0) {
-            loader.load(
-                path,
-                (gltf) => {
-                    const model = gltf.scene;
-                    model.position.set(position.x, position.y, position.z);
-                    model.scale.set(scale, scale, scale);
-                    if (rotationX) model.rotation.x = rotationX;
-                    scene.add(model);
-                },
-                undefined,
-                (error) => {
-                    console.error('GLBファイルの読み込みに失敗しました:', error);
-                }
-            );
-        }
+        const witnessGeometry = new THREE.BoxGeometry(0.5, 1.5, 0.5);
+        const witnessMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const witness1 = new THREE.Mesh(witnessGeometry, witnessMaterial);
+        witness1.position.set(-2, 0.75, -2);
+        scene.add(witness1);
 
-        // サイバーシティのオブジェクトをGLBで置き換え
-        loadGLB(GLB_PATHS.ground, { x: -5, y: 0, z: -5 }, 25); // 地面
-        loadGLB(GLB_PATHS.body, { x: 0, y: 0.1, z: 0 }, 3); // 死体
-        loadGLB(GLB_PATHS.clue1, { x: 2, y: 0.25, z: 1 }, 1); // 手がかり1
-        loadGLB(GLB_PATHS.clue2, { x: -1, y: 0.25, z: 2 }, 1); // 手がかり2
-        loadGLB(GLB_PATHS.witness1, { x: -2, y: 0, z: -2 }, 3); // 目撃者1
-        loadGLB(GLB_PATHS.witness2, { x: 3, y: 0, z: -3 }, 3); // 目撃者2
+        const witness2 = new THREE.Mesh(witnessGeometry, witnessMaterial);
+        witness2.position.set(3, 0.75, -3);
+        scene.add(witness2);
 
         // カメラ初期位置
         camera.position.set(0, 5, 10);
@@ -120,7 +103,7 @@
         const progressElement = document.getElementById('progress');
         const choicesElement = document.getElementById('choices');
 
-        // 50問のストーリーデータ（前回と同じ）
+        // 50問のストーリーデータ
         const story = [
             { id: 0, text: "サイバーシティの路地裏で男の死体を発見した。ネオンの光が血溜まりを照らす。どうする？", choices: [
                 { text: "死体を詳しく調べる", next: 1, progress: 2 },

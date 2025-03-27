@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Centipede Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script>
+        // シーン、カメラ、レンダラーの設定
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // プレイヤーの作成
+        const playerGeometry = new THREE.BoxGeometry(1, 1, 1);
+        const playerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const player = new THREE.Mesh(playerGeometry, playerMaterial);
+        player.position.y = -20;
+        scene.add(player);
+
+        // 敵のセグメントクラス
+        class EnemySegment {
+            constructor(x, y) {
+                this.mesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(1, 1, 1),
+                    new THREE.MeshBasicMaterial({ color: 0xff0000 })
+                );
+                this.mesh.position.set(x, y, 0);
+            }
+        }
+
+        // 敵の管理
+        let enemies = [];
+        function createEnemy(startX, startY) {
+            const segments = [];
+            const speed = 0.1; // 固定スピード
+
+            for (let i = 0; i < 16; i++) { // 16セグメントに変更
+                const segment = new EnemySegment(startX - i, startY);
+                segments.push(segment);
+                scene.add(segment.mesh);
+            }
+
+            return {
+                segments,
+                speed,
+                direction: { x: Math.random() > 0.5 ? 1 : -1, y: Math.random() - 0.5 },
+                directionChangeTimer: 0
+            };
+        }
+
+        // 3体の敵を作成
+        enemies.push(createEnemy(-10, 20));
+        enemies.push(createEnemy(0, 15));
+        enemies.push(createEnemy(10, 10));
+
+        // 弾の管理
+        const bullets = [];
+        class Bullet {
+            constructor(x, y) {
+                this.mesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.3, 0.3, 0.3),
+                    new THREE.MeshBasicMaterial({ color: 0xffff00 })
+                );
+                this.mesh.position.set(x, y, 0);
+                scene.add(this.mesh);
+            }
+        }
+
+        // キー入力の管理
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.code] = true);
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        // ゲームループ
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // プレイヤーの移動
+            const playerSpeed = 0.2;
+            if (keys['ArrowLeft'] || keys['KeyA']) player.position.x -= playerSpeed;
+            if (keys['ArrowRight'] || keys['KeyD']) player.position.x += playerSpeed;
+            if (keys['ArrowUp'] || keys['KeyW']) player.position.y += playerSpeed;
+            if (keys['ArrowDown'] || keys['KeyS']) player.position.y -= playerSpeed;
+            player.position.x = Math.max(-30, Math.min(30, player.position.x));
+            player.position.y = Math.max(-20, Math.min(20, player.position.y));
+
+            // 弾の発射
+            if (keys['Space'] && !keys['spacePressed']) {
+                const bullet = new Bullet(player.position.x, player.position.y + 1);
+                bullets.push(bullet);
+                keys['spacePressed'] = true;
+            }
+            if (!keys['Space']) keys['spacePressed'] = false;
+
+            // 弾の移動
+            bullets.forEach((bullet, index) => {
+                bullet.mesh.position.y += 0.3;
+                if (bullet.mesh.position.y > 25) {
+                    scene.remove(bullet.mesh);
+                    bullets.splice(index, 1);
+                }
+            });
+
+            // 敵の移動と分裂
+            enemies.forEach((enemy, enemyIndex) => {
+                const head = enemy.segments[0];
+                
+                // ランダムな方向変更
+                enemy.directionChangeTimer++;
+                if (enemy.directionChangeTimer > 60) { // 約1秒ごとに方向変更
+                    enemy.direction.x = (Math.random() - 0.5) * 2; // -1 から 1
+                    enemy.direction.y = (Math.random() - 0.5) * 2; // -1 から 1
+                    enemy.directionChangeTimer = 0;
+                }
+
+                // 頭の移動
+                head.mesh.position.x += enemy.direction.x * enemy.speed;
+                head.mesh.position.y += enemy.direction.y * enemy.speed;
+
+                // 画面端での反射
+                if (head.mesh.position.x > 30 || head.mesh.position.x < -30) {
+                    enemy.direction.x *= -1;
+                }
+                if (head.mesh.position.y > 20 || head.mesh.position.y < -20) {
+                    enemy.direction.y *= -1;
+                }
+
+                // 後続セグメントが頭に追従
+                for (let i = 1; i < enemy.segments.length; i++) {
+                    const current = enemy.segments[i];
+                    const previous = enemy.segments[i - 1];
+                    const targetPos = previous.mesh.position.clone();
+                    current.mesh.position.lerp(targetPos, 0.2);
+                }
+
+                // 衝突判定
+                enemy.segments.forEach((segment, segmentIndex) => {
+                    bullets.forEach((bullet, bulletIndex) => {
+                        if (segment.mesh.position.distanceTo(bullet.mesh.position) < 1) {
+                            // 分裂処理
+                            if (enemy.segments.length > 1 && segmentIndex < enemy.segments.length - 1) {
+                                const newSegments = enemy.segments.splice(segmentIndex + 1);
+                                const newEnemy = {
+                                    segments: newSegments,
+                                    speed: enemy.speed,
+                                    direction: { x: (Math.random() - 0.5) * 2, y: (Math.random() - 0.5) * 2 },
+                                    directionChangeTimer: 0
+                                };
+                                enemies.push(newEnemy);
+                            }
+                            scene.remove(segment.mesh);
+                            enemy.segments.splice(segmentIndex, 1);
+                            scene.remove(bullet.mesh);
+                            bullets.splice(bulletIndex, 1);
+                        }
+                    });
+                });
+
+                if (enemy.segments.length === 0) {
+                    enemies.splice(enemyIndex, 1);
+                }
+            });
+
+            // カメラ位置
+            camera.position.z = 40;
+            renderer.render(scene, camera);
+        }
+
+        // ウィンドウリサイズ対応
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
