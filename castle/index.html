@@ -329,11 +329,11 @@
             document.body.appendChild(renderer.domElement);
             
             // 光源の追加
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // 環境光を強くする
+            const ambientLight = new THREE.AmbientLight(0xffffff, 5.7); // 環境光を強くする
             scene.add(ambientLight);
             
             // メインの指向性ライト
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // 強度を上げる
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 5.0); // 強度を上げる
             directionalLight.position.set(1, 1, 1);
             directionalLight.castShadow = true; // 影を有効化
             scene.add(directionalLight);
