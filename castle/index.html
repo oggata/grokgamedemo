@@ -329,24 +329,24 @@
             document.body.appendChild(renderer.domElement);
             
             // 光源の追加
-            const ambientLight = new THREE.AmbientLight(0xffffff, 5.7); // 環境光を強くする
+            const ambientLight = new THREE.AmbientLight(0xffffff, 10.0); // 環境光を強くする
             scene.add(ambientLight);
             
             // メインの指向性ライト
             const directionalLight = new THREE.DirectionalLight(0xffffff, 5.0); // 強度を上げる
             directionalLight.position.set(1, 1, 1);
             directionalLight.castShadow = true; // 影を有効化
-            scene.add(directionalLight);
+            //scene.add(directionalLight);
             
             // 補助ライト（反対側からの柔らかい光）
             const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
             fillLight.position.set(-1, 0.5, -1);
-            scene.add(fillLight);
+            //scene.add(fillLight);
             
             // 下からの光（モデルの底部も見えるように）
             const bottomLight = new THREE.DirectionalLight(0xffffee, 0.4);
             bottomLight.position.set(0, -1, 0);
-            scene.add(bottomLight);
+            //scene.add(bottomLight);
             
             // プレイヤー（カメラ）の位置にスポットライト
             const spotLight = new THREE.SpotLight(0xffffff, 0.8);
@@ -356,7 +356,7 @@
             spotLight.decay = 2;
             spotLight.distance = 200;
             camera.add(spotLight); // カメラに追加して一緒に動くようにする
-            scene.add(camera); // カメラをシーンに追加
+            //scene.add(camera); // カメラをシーンに追加
             
             // GLTFローダーの初期化
             gltfLoader = new THREE.GLTFLoader();
