@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>探偵シミュレーションゲーム（GLB版）</title>
+    <title>探偵シミュレーションゲーム（GLB版＋照明）</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a1a1a; }
         canvas { display: block; }
@@ -51,14 +51,24 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
+        // 照明の追加
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // 環境光（白色、強度0.5）
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // 指向性光（白色、強度1.0）
+        directionalLight.position.set(0, 10, 10); // 上方から照らす
+        directionalLight.target.position.set(0, 0, 0); // シーン中央をターゲット
+        scene.add(directionalLight);
+        scene.add(directionalLight.target);
+
         // GLBファイルのパスをまとめる
         const GLB_PATHS = {
-            ground: './glb/sample.glb',
-            body: './glb/sample.glb',
-            clue1: './glb/sample.glb',
-            clue2: './glb/sample.glb',
-            witness1: './glb/sample.glb',
-            witness2: './glb/sample.glb'
+            ground: '../glb/103ff4831525_abc5248f22c2_Western_style_room_.glb',
+            body: '../glb/62a0e1712e9f_514d24f0b227_A_lying_human_corps.glb',
+            clue1: '../glb/f439041aaa7c_0aa31b6b0fa3_knife__3d_asset_0_g.glb',
+            clue2: '../glb/f439041aaa7c_0aa31b6b0fa3_knife__3d_asset_0_g.glb',
+            witness1: '../glb/467d4b0d264e_ec7833cecb55_Hooded_Man__3d_asse.glb',
+            witness2: '../glb/eff7ce06f532_93508fd98763_Elderly_man_in_whee.glb'
         };
 
         // GLTFLoaderのインスタンス
@@ -83,12 +93,12 @@
         }
 
         // サイバーシティのオブジェクトをGLBで置き換え
-        loadGLB(GLB_PATHS.ground, { x: 0, y: 0, z: 0 }, 50, -Math.PI / 2); // 地面
-        loadGLB(GLB_PATHS.body, { x: 0, y: 0.1, z: 0 }, 1); // 死体
-        loadGLB(GLB_PATHS.clue1, { x: 2, y: 0.25, z: 1 }, 0.5); // 手がかり1
-        loadGLB(GLB_PATHS.clue2, { x: -1, y: 0.25, z: 2 }, 0.5); // 手がかり2
-        loadGLB(GLB_PATHS.witness1, { x: -2, y: 0, z: -2 }, 1); // 目撃者1
-        loadGLB(GLB_PATHS.witness2, { x: 3, y: 0, z: -3 }, 1); // 目撃者2
+        loadGLB(GLB_PATHS.ground, { x: -5, y: 0, z: -5 }, 25); // 地面
+        loadGLB(GLB_PATHS.body, { x: 0, y: 0.1, z: 0 }, 3); // 死体
+        loadGLB(GLB_PATHS.clue1, { x: 2, y: 0.25, z: 1 }, 1); // 手がかり1
+        loadGLB(GLB_PATHS.clue2, { x: -1, y: 0.25, z: 2 }, 1); // 手がかり2
+        loadGLB(GLB_PATHS.witness1, { x: -2, y: 0, z: -2 }, 3); // 目撃者1
+        loadGLB(GLB_PATHS.witness2, { x: 3, y: 0, z: -3 }, 3); // 目撃者2
 
         // カメラ初期位置
         camera.position.set(0, 5, 10);

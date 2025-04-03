@@ -127,9 +127,9 @@
         // ============================================================
         // モデルのURL設定（実際のプロジェクトでは適切なURLに変更してください）
         const MODEL_URLS = {
-            soldier: 'https://example.com/models/soldier.gltf',   // 通常兵士
-            archer: 'https://example.com/models/archer.gltf',     // 弓兵
-            knight: 'https://example.com/models/knight.gltf'      // 重装兵
+            soldier: '../glb/8ab8b22e643d_Sengoku_period_in_Japan__sol_0_glb.glb',   // 通常兵士
+            archer: '../glb/8ab8b22e643d_Sengoku_period_in_Japan__sol_0_glb.glb',     // 弓兵
+            knight: '../glb/8ab8b22e643d_Sengoku_period_in_Japan__sol_0_glb.glb'      // 重装兵
         };
         
         // モデル読み込み用変数
@@ -158,9 +158,26 @@
                     (gltf) => {
                         const model = gltf.scene;
                         // スケールの調整
-                        model.scale.set(3, 3, 3);
+                        model.scale.set(16, 16, 16);
                         // 回転の調整（必要に応じて）
                         model.rotation.y = Math.PI;
+                        
+                        // モデルにシャドウを設定
+                        model.traverse(function(node) {
+                            if (node.isMesh) {
+                                node.castShadow = true;
+                                node.receiveShadow = true;
+                                
+                                // マテリアルの明るさを調整
+                                if (node.material) {
+                                    // 単一のマテリアルの場合
+                                    adjustMaterial(node.material);
+                                } else if (node.materials) {
+                                    // 複数のマテリアルの場合
+                                    node.materials.forEach(material => adjustMaterial(material));
+                                }
+                            }
+                        });
                         
                         // アニメーションの設定（モデルにアニメーションがある場合）
                         if (gltf.animations && gltf.animations.length > 0) {
@@ -183,6 +200,41 @@
                     }
                 );
             });
+        }
+        
+        // マテリアルを明るく調整する関数
+        function adjustMaterial(material) {
+            if (!material) return;
+            
+            // 明るさを上げる
+            if (material.color) {
+                // 色の明るさを少し上げる
+                const hsl = {};
+                material.color.getHSL(hsl);
+                hsl.l = Math.min(1.0, hsl.l * 1.2); // 明るさを20%増加
+                material.color.setHSL(hsl.h, hsl.s, hsl.l);
+            }
+            
+            // 反射率を上げる
+            if (material.reflectivity !== undefined) {
+                material.reflectivity = Math.min(1.0, material.reflectivity * 1.3);
+            }
+            
+            // 光沢を調整
+            if (material.shininess !== undefined) {
+                material.shininess = Math.min(100, material.shininess * 1.5);
+            }
+            
+            // エミッシブを追加して自己発光させる
+            if (!material.emissive) {
+                material.emissive = new THREE.Color(0x222222);
+            } else {
+                // 既存のエミッシブ値を少し強くする
+                material.emissive.multiplyScalar(1.2);
+            }
+            
+            // マテリアルの更新フラグ
+            material.needsUpdate = true;
         }
         
         // モデルのフォールバック（モデル読み込み失敗時に使用する簡易ジオメトリ）
@@ -277,12 +329,34 @@
             document.body.appendChild(renderer.domElement);
             
             // 光源の追加
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // 環境光を強くする
             scene.add(ambientLight);
             
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            // メインの指向性ライト
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // 強度を上げる
             directionalLight.position.set(1, 1, 1);
+            directionalLight.castShadow = true; // 影を有効化
             scene.add(directionalLight);
+            
+            // 補助ライト（反対側からの柔らかい光）
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            fillLight.position.set(-1, 0.5, -1);
+            scene.add(fillLight);
+            
+            // 下からの光（モデルの底部も見えるように）
+            const bottomLight = new THREE.DirectionalLight(0xffffee, 0.4);
+            bottomLight.position.set(0, -1, 0);
+            scene.add(bottomLight);
+            
+            // プレイヤー（カメラ）の位置にスポットライト
+            const spotLight = new THREE.SpotLight(0xffffff, 0.8);
+            spotLight.position.copy(camera.position);
+            spotLight.angle = Math.PI / 4;
+            spotLight.penumbra = 0.1;
+            spotLight.decay = 2;
+            spotLight.distance = 200;
+            camera.add(spotLight); // カメラに追加して一緒に動くようにする
+            scene.add(camera); // カメラをシーンに追加
             
             // GLTFローダーの初期化
             gltfLoader = new THREE.GLTFLoader();
@@ -905,9 +979,27 @@
                 
                 // エフェクトの更新
                 updateEffects(delta);
+                
+                // カメラに付属するスポットライトの更新
+                updateLights();
             }
             
             renderer.render(scene, camera);
+        }
+        
+        // ライトの更新
+        function updateLights() {
+            // カメラに付属するスポットライトを更新（常にカメラの方向を照らす）
+            camera.children.forEach(child => {
+                if (child.isSpotLight) {
+                    child.target.position.set(
+                        camera.position.x + Math.sin(camera.rotation.y) * 10,
+                        camera.position.y + Math.sin(-camera.rotation.x) * 10,
+                        camera.position.z + Math.cos(camera.rotation.y) * 10
+                    );
+                    child.target.updateMatrixWorld();
+                }
+            });
         }
         
         // 弾丸の更新
