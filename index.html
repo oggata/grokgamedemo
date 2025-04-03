@@ -1,35 +1,239 @@
-game
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ゲームワールド冒険の扉</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a2e;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            background-image: radial-gradient(circle, #2a2a4a 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(138, 43, 226, 0.5);
+        }
+        
+        h1 {
+            font-size: 3.5em;
+            margin: 0;
+            color: #ff6b6b;
+            text-shadow: 0 0 10px #ff6b6b, 0 0 20px #ff6b6b;
+            letter-spacing: 2px;
+        }
+        
+        .subtitle {
+            font-size: 1.5em;
+            color: #4cc9f0;
+            margin-top: 10px;
+            text-shadow: 0 0 5px #4cc9f0;
+        }
+        
+        .game-categories {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .category {
+            background: linear-gradient(145deg, #16213e, #0f3460);
+            border-radius: 15px;
+            padding: 20px;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+        
+        .category:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+        }
+        
+        .category h3 {
+            text-align: center;
+            margin-top: 0;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            color: #f8f9fa;
+            font-size: 1.5em;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .category h3::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, #ff9a8b, #ff6a88, #ff99ac);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.3s ease;
+        }
+        
+        .category:hover h3::after {
+            transform: scaleX(1);
+        }
+        
+        .game-link {
+            display: inline-block;
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #7579e7, #b28df0);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .game-link:hover {
+            background: linear-gradient(135deg, #b28df0, #7579e7);
+            transform: scale(1.05) translateY(-3px);
+            box-shadow: 0 7px 15px rgba(117, 121, 231, 0.4);
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            padding: 20px;
+            color: #a9a9a9;
+            font-size: 0.9em;
+        }
 
-<h3>shooting</h3> 
-
-<a href="./shooting/index.html">run</a>
-
-<h3>shootingAR</h3> 
-
-<a href="./shooting/index2.html">run</a>
-
-<h3> popul </h3>
-
-<a href="./popul/index.html">run</a>
-
-
-<h3> et </h3>
-
-<a href="./et/index.html">run</a>
-
-
-<h3> centi </h3>
-
-<a href="./centi/index.html">run</a>
-
-<h3> detecotive </h3>
-
-<a href="./detective/index.html">run</a>
-
-
-<h3> castle </h3>
-<a href="./castle/index.html">run</a>
-
-<h3>test</h3>
-
-<a href="./test.html">test</a>
+        .category-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+            color: #f8f9fa;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+        
+        /* 扉が開くアニメーション */
+        @keyframes doorOpen {
+            0% { transform: rotateY(0deg); opacity: 0.3; }
+            100% { transform: rotateY(70deg); opacity: 1; }
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        
+        .category:hover .category-icon {
+            animation: float 2s ease infinite;
+        }
+        
+        .door-effect {
+            perspective: 1000px;
+        }
+        
+        .category {
+            transform-origin: left;
+            transform-style: preserve-3d;
+            transition: transform 0.6s ease;
+        }
+        
+        .category:hover {
+            animation: doorOpen 0.6s forwards;
+        }
+        
+        /* 光るボタン効果 */
+        @keyframes glow {
+            0% { box-shadow: 0 0 5px rgba(117, 121, 231, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(117, 121, 231, 0.8); }
+            100% { box-shadow: 0 0 5px rgba(117, 121, 231, 0.5); }
+        }
+        
+        .glow {
+            animation: glow 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ゲームワールド冒険の扉</h1>
+            <div class="subtitle">〜 ミニゲーム王国への入り口 〜</div>
+        </header>
+        
+        <div class="game-categories door-effect">
+            <div class="category">
+                <div class="category-icon">🎯</div>
+                <h3>シューティングゲーム</h3>
+                <a href="./shooting/index.html" class="game-link glow">プレイする</a>
+            </div>
+            
+            <div class="category">
+                <div class="category-icon">🔫</div>
+                <h3>シューティングAR</h3>
+                <a href="./shooting/index2.html" class="game-link glow">プレイする</a>
+            </div>
+            
+            <div class="category">
+                <div class="category-icon">👨‍👩‍👧‍👦</div>
+                <h3>ポピュレーション</h3>
+                <a href="./popul/index.html" class="game-link glow">プレイする</a>
+            </div>
+            
+            <div class="category">
+                <div class="category-icon">👽</div>
+                <h3>エイリアン</h3>
+                <a href="./et/index.html" class="game-link glow">プレイする</a>
+            </div>
+            
+            <div class="category">
+                <div class="category-icon">🐛</div>
+                <h3>ムカデ</h3>
+                <a href="./centi/index.html" class="game-link glow">プレイする</a>
+            </div>
+            
+            <div class="category">
+                <div class="category-icon">🕵️</div>
+                <h3>探偵ゲーム</h3>
+                <a href="./detective/index.html" class="game-link glow">プレイする</a>
+            </div>
+            
+            <div class="category">
+                <div class="category-icon">🏰</div>
+                <h3>お城</h3>
+                <a href="./castle/index.html" class="game-link glow">プレイする</a>
+            </div>
+            
+            <div class="category">
+                <div class="category-icon">🧪</div>
+                <h3>テスト</h3>
+                <a href="./test.html" class="game-link glow">テスト</a>
+            </div>
+        </div>
+        
+        <footer>
+            © 2025 ゲームワールド冒険の扉 | さあ、あなたの冒険が始まる！
+        </footer>
+    </div>
+</body>
+</html>
