@@ -218,26 +218,41 @@ function initRooms() {
 }
 
 // 部屋の切り替え
+// 部屋の切り替え関数を修正
 function changeRoom(targetRoomId, targetPosition, targetRotation) {
     try {
         gameState.isTransitioning = true;
         
-        // ドアのアニメーション表示
+        // ドアのアニメーション要素の存在確認と作成
         const doorTransition = document.getElementById('door-transition');
         const doorAnimation = document.getElementById('door-animation');
-        const doorLeft = document.querySelector('.door-left');
-        const doorRight = document.querySelector('.door-right');
+        let doorLeft = document.querySelector('.door-left');
+        let doorRight = document.querySelector('.door-right');
+        
+        // ドア要素が存在しない場合は作成する
+        if (!doorLeft && doorAnimation) {
+            doorLeft = document.createElement('div');
+            doorLeft.className = 'door-left';
+            doorAnimation.appendChild(doorLeft);
+        }
+        
+        if (!doorRight && doorAnimation) {
+            doorRight = document.createElement('div');
+            doorRight.className = 'door-right';
+            doorAnimation.appendChild(doorRight);
+        }
+        
         const doorText = document.getElementById('door-text');
         
-        doorTransition.style.display = 'flex';
-        doorAnimation.style.display = 'block';
-        doorText.textContent = 'ドアを開いています...';
+        if (doorTransition) doorTransition.style.display = 'flex';
+        if (doorAnimation) doorAnimation.style.display = 'block';
+        if (doorText) doorText.textContent = 'ドアを開いています...';
         
         // ドアを開くアニメーション
         setTimeout(() => {
-            doorLeft.style.transform = 'rotateY(90deg)';
-            doorRight.style.transform = 'rotateY(-90deg)';
-            doorText.textContent = 'ドアを通過中...';
+            if (doorLeft) doorLeft.style.transform = 'rotateY(90deg)';
+            if (doorRight) doorRight.style.transform = 'rotateY(-90deg)';
+            if (doorText) doorText.textContent = 'ドアを通過中...';
         }, 500);
         
         // 部屋の切り替え
@@ -245,7 +260,7 @@ function changeRoom(targetRoomId, targetPosition, targetRotation) {
             console.log(`部屋を切り替え中: ${targetRoomId}に移動します`);
             
             // 現在の部屋からプレイヤーモデルを削除
-            if (gameState.currentRoom) {
+            if (gameState.currentRoom && player.model) {
                 gameState.currentRoom.remove(player.model);
             }
             
@@ -269,19 +284,30 @@ function changeRoom(targetRoomId, targetPosition, targetRotation) {
             const targetRoom = scenes[targetRoomId];
             if (!targetRoom) {
                 console.error(`部屋 ${targetRoomId} が見つかりません`);
+                gameState.isTransitioning = false;
                 return;
             }
             
             gameState.currentRoom = targetRoom.scene;
-            gameState.currentRoom.add(player.model);
+            
+            // プレイヤーモデルが存在するか確認
+            if (player.model) {
+                gameState.currentRoom.add(player.model);
+            } else {
+                console.error("プレイヤーモデルが存在しません");
+            }
             
             // プレイヤーの位置と向きを設定
             player.position.copy(targetPosition);
-            player.model.position.copy(player.position);
+            if (player.model) {
+                player.model.position.copy(player.position);
+            }
             
             // プレイヤーの向きを設定
             player.direction.set(Math.sin(targetRotation), 0, Math.cos(targetRotation)).normalize();
-            player.model.rotation.y = targetRotation;
+            if (player.model) {
+                player.model.rotation.y = targetRotation;
+            }
             
             // ゾンビの生成
             if (targetRoomId === 'room4') {
@@ -298,15 +324,15 @@ function changeRoom(targetRoomId, targetPosition, targetRotation) {
             updateCameraPosition();
             
             // ドアを閉じるアニメーション
-            doorText.textContent = 'ドアを閉じています...';
-            doorLeft.style.transform = 'rotateY(0deg)';
-            doorRight.style.transform = 'rotateY(0deg)';
+            if (doorText) doorText.textContent = 'ドアを閉じています...';
+            if (doorLeft) doorLeft.style.transform = 'rotateY(0deg)';
+            if (doorRight) doorRight.style.transform = 'rotateY(0deg)';
         }, 2000);
         
         // トランジション終了
         setTimeout(() => {
-            doorAnimation.style.display = 'none';
-            doorTransition.style.display = 'none';
+            if (doorAnimation) doorAnimation.style.display = 'none';
+            if (doorTransition) doorTransition.style.display = 'none';
             gameState.isTransitioning = false;
             console.log("部屋の切り替えが完了しました");
         }, 3500);
@@ -356,21 +382,53 @@ function initGame() {
         // 部屋の作成
         initRooms();
         
+        // scenes配列の有効性チェック
+        if (!scenes || !scenes.room1 || !scenes.room1.scene) {
+            console.error("部屋が正しく初期化されていません");
+            alert("ゲームの読み込みに失敗しました。ページを更新してください。");
+            return;
+        }
+        
         // プレイヤーモデルの作成
         console.log("プレイヤーモデルを作成中...");
-        createPlayerModel();
+        const playerModel = createPlayerModel();
+        
+        if (!playerModel) {
+            console.error("プレイヤーモデルの作成に失敗しました");
+            alert("プレイヤーモデルの作成に失敗しました。ページを更新してください。");
+            return;
+        }
         
         // 最初の部屋を設定
         console.log("最初の部屋を設定中...");
         gameState.currentRoom = scenes.room1.scene;
-        gameState.currentRoom.add(player.model);
-        player.position.set(0, 0, 0);
-        player.model.position.copy(player.position);
+        
+        // プレイヤーモデルを部屋に追加
+        if (player.model) {
+            gameState.currentRoom.add(player.model);
+            player.position.set(0, 0, 0);
+            player.model.position.copy(player.position);
+        } else {
+            console.error("プレイヤーモデルが正しく作成されませんでした");
+            alert("プレイヤーモデルの作成に失敗しました。ページを更新してください。");
+            return;
+        }
         
         // 最初のゾンビを生成
         console.log("最初のゾンビを生成中...");
-        const zombie = new Zombie(new THREE.Vector3(3, 0, -3));
-        zombies.push(zombie);
+        try {
+            const zombie = new Zombie(new THREE.Vector3(3, 0, -3));
+            // ゾンビが正しく作成されたか確認
+            if (zombie && !zombie.pendingAddToScene) {
+                zombies.push(zombie);
+            } else if (zombie && zombie.pendingAddToScene && gameState.currentRoom) {
+                // 後からシーンに追加
+                zombie.addToScene(gameState.currentRoom);
+                zombies.push(zombie);
+            }
+        } catch (error) {
+            console.error("ゾンビの作成中にエラーが発生しました:", error);
+        }
         
         // イベントリスナーの設定
         console.log("イベントリスナーを設定中...");
@@ -378,10 +436,17 @@ function initGame() {
         window.addEventListener('keydown', onKeyDown);
         window.addEventListener('keyup', onKeyUp);
         
+        // UIの初期化
+        updateHealthBar();
+        updateAmmoCounter();
+        
         // ロード完了
         console.log("ロード完了");
         gameState.isLoading = false;
-        document.getElementById('loading-screen').style.display = 'none';
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+            loadingScreen.style.display = 'none';
+        }
         
         // アニメーションループの開始
         console.log("アニメーション開始");
@@ -396,14 +461,14 @@ function initGame() {
 function animate() {
     requestAnimationFrame(animate);
     
-    if (!gameState.isLoading && !gameState.isTransitioning) {
+    if (!gameState.isLoading && !gameState.isTransitioning && gameState.currentRoom) {
         updatePlayer();
         updateCameraPosition();
         updateBullets();
         updateZombies();
+        
+        renderer.render(gameState.currentRoom, camera);
     }
-    
-    renderer.render(gameState.currentRoom, camera);
 }
 
 // ページが完全に読み込まれてから開始

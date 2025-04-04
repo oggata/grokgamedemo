@@ -1,4 +1,7 @@
 // enemies.js - ゾンビと敵関連の処理
+if (typeof THREE === 'undefined' && typeof window.THREE !== 'undefined') {
+    var THREE = window.THREE;
+}
 
 // ゾンビクラス
 class Zombie {

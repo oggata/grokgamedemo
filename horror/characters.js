@@ -1,4 +1,10 @@
 // characters.js - プレイヤーと弾丸の管理
+// characters.js の先頭に追加
+// THREE オブジェクトがグローバルスコープで利用可能になるようにする
+if (typeof THREE === 'undefined' && typeof window.THREE !== 'undefined') {
+    var THREE = window.THREE;
+}
+
 
 // プレイヤーの設定
 const player = {
