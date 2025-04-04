@@ -3,1024 +3,941 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR城防衛ゲーム</title>
+    <title>バイオハザード風ゲーム</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            font-family: sans-serif;
+            font-family: Arial, sans-serif;
         }
-        #info {
-            position: absolute;
-            top: 10px;
-            width: 100%;
-            text-align: center;
-            color: white;
-            z-index: 100;
+        canvas {
             display: block;
-            pointer-events: none;
         }
-        #timer, #score {
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 5px 10px;
-            border-radius: 5px;
-            margin: 0 10px;
-        }
-        #gameOver {
+        #loading-screen {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-            display: none;
-            z-index: 200;
-        }
-        #startButton {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 15px 30px;
-            background-color: #4CAF50;
-            color: white;
-            font-size: 18px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            z-index: 100;
-        }
-        #crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 20px;
-            height: 20px;
-            pointer-events: none;
-            display: none;
-            z-index: 100;
-        }
-        #crosshair::before, #crosshair::after {
-            content: '';
-            position: absolute;
-            background-color: red;
-        }
-        #crosshair::before {
+            top: 0;
+            left: 0;
             width: 100%;
-            height: 2px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-        #crosshair::after {
             height: 100%;
-            width: 2px;
-            left: 50%;
-            transform: translateX(-50%);
+            background-color: #000000;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
         }
-        #fireButton {
+        #door-transition {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000000;
+            display: none;
+            z-index: 50;
+            color: #ffffff;
+            font-size: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        #door-animation {
+            width: 80%;
+            height: 60%;
+            background-color: #333;
+            position: relative;
+            overflow: hidden;
+            display: none;
+        }
+        .door-left, .door-right {
+            position: absolute;
+            width: 50%;
+            height: 100%;
+            background-color: #555;
+            border: 2px solid #777;
+            transition: transform 2s;
+        }
+        .door-left {
+            left: 0;
+            transform-origin: left center;
+        }
+        .door-right {
+            right: 0;
+            transform-origin: right center;
+        }
+        #health-bar {
             position: absolute;
             bottom: 20px;
             left: 20px;
-            width: 70px;
-            height: 70px;
-            background-color: #FF3333;
-            color: white;
-            font-weight: bold;
-            border: none;
-            border-radius: 50%;
-            display: none;
-            font-size: 16px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            z-index: 100;
+            width: 200px;
+            height: 20px;
+            background-color: #333;
+            border: 2px solid #666;
+            z-index: 10;
         }
-        #fireButton:active {
-            background-color: #CC0000;
-            transform: scale(0.95);
+        #health-fill {
+            width: 100%;
+            height: 100%;
+            background-color: #00cc00;
+        }
+        #ammo-counter {
+            position: absolute;
+            bottom: 50px;
+            left: 20px;
+            color: white;
+            font-size: 18px;
+            z-index: 10;
+        }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 16px;
+            z-index: 10;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
         }
     </style>
 </head>
 <body>
-    <div id="info">
-        <span id="timer">残り時間: 30秒</span>
-        <span id="score">スコア: 0</span>
+    <div id="loading-screen">
+        <h1>バイオハザード風ゲーム</h1>
+        <p>読み込み中...</p>
     </div>
-    <div id="crosshair"></div>
-    <button id="startButton">ゲームを開始</button>
-    <button id="calibrateButton" style="display: none; position: absolute; bottom: 20px; right: 20px; padding: 10px; background-color: #007BFF; color: white; border: none; border-radius: 5px; z-index: 100;">位置合わせ</button>
-    <button id="fireButton">発射</button>
-    <div id="gameOver">
-        <h2>ゲーム終了!</h2>
-        <p>あなたのスコア: <span id="finalScore">0</span></p>
-        <button id="restartButton">もう一度プレイ</button>
+    
+    <div id="door-transition">
+        <div id="door-animation">
+            <div class="door-left"></div>
+            <div class="door-right"></div>
+        </div>
+        <p id="door-text">ドアを開いています...</p>
+    </div>
+
+    <div id="health-bar">
+        <div id="health-fill"></div>
+    </div>
+    <div id="ammo-counter">弾数: 30 / 30</div>
+    <div id="instructions">
+        移動: WASD<br>
+        射撃: Shift<br>
+        リロード: R<br>
+        ドアを開く: E (ドアの前で)
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script>
-        // ============================================================
-        // GLTFモデル設定
-        // ============================================================
-        // モデルのURL設定（実際のプロジェクトでは適切なURLに変更してください）
-        const MODEL_URLS = {
-            soldier: 'https://example.com/models/soldier.gltf',   // 通常兵士
-            archer: 'https://example.com/models/archer.gltf',     // 弓兵
-            knight: 'https://example.com/models/knight.gltf'      // 重装兵
+        // ゲームの状態管理
+        const gameState = {
+            health: 100,
+            maxHealth: 100,
+            ammo: 30,
+            maxAmmo: 30,
+            currentRoom: null,
+            isTransitioning: false,
+            isLoading: true,
+            zombiesKilled: 0
+        };
+
+        // キー入力の状態
+        const keyState = {
+            w: false,
+            a: false,
+            s: false,
+            d: false,
+            shift: false,
+            e: false,
+            r: false
         };
         
-        // モデル読み込み用変数
-        let gltfLoader;
-        let modelCache = {}; // 一度読み込んだモデルをキャッシュする
-
-        // モデル読み込み関数
-        function loadModel(modelType) {
-            return new Promise((resolve, reject) => {
-                // すでにキャッシュにある場合はそれを返す
-                if (modelCache[modelType]) {
-                    resolve(modelCache[modelType].clone());
-                    return;
-                }
-                
-                // モデルURLの取得
-                const modelUrl = MODEL_URLS[modelType];
-                if (!modelUrl) {
-                    reject(new Error(`モデルタイプ "${modelType}" のURLが見つかりません`));
-                    return;
-                }
-                
-                // モデルの読み込み
-                gltfLoader.load(
-                    modelUrl,
-                    (gltf) => {
-                        const model = gltf.scene;
-                        // スケールの調整
-                        model.scale.set(3, 3, 3);
-                        // 回転の調整（必要に応じて）
-                        model.rotation.y = Math.PI;
-                        
-                        // アニメーションの設定（モデルにアニメーションがある場合）
-                        if (gltf.animations && gltf.animations.length > 0) {
-                            model.animations = gltf.animations;
-                        }
-                        
-                        // キャッシュに保存
-                        modelCache[modelType] = model;
-                        
-                        // クローンを返す
-                        resolve(model.clone());
-                    },
-                    (xhr) => {
-                        // 読み込み進捗（デバッグ用）
-                        console.log(`${modelType}モデル読み込み: ${(xhr.loaded / xhr.total * 100).toFixed(2)}%`);
-                    },
-                    (error) => {
-                        console.error(`モデル読み込みエラー: ${error.message}`);
-                        reject(error);
-                    }
-                );
-            });
-        }
+        // レンダラーの設定
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
         
-        // モデルのフォールバック（モデル読み込み失敗時に使用する簡易ジオメトリ）
-        function createFallbackEnemy(enemyType) {
-            let enemyGeometry, enemyMaterial, enemy;
-            
-            switch (enemyType) {
-                case 'soldier': // 通常兵士
-                    enemyGeometry = new THREE.BoxGeometry(3, 6, 3);
-                    enemyMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
-                    break;
-                case 'archer': // 弓兵
-                    enemyGeometry = new THREE.BoxGeometry(2, 7, 2);
-                    enemyMaterial = new THREE.MeshLambertMaterial({ color: 0xff9900 });
-                    break;
-                case 'knight': // 重装兵
-                    enemyGeometry = new THREE.BoxGeometry(5, 8, 5);
-                    enemyMaterial = new THREE.MeshLambertMaterial({ color: 0x990000 });
-                    break;
-                default:
-                    enemyGeometry = new THREE.BoxGeometry(3, 6, 3);
-                    enemyMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+        // シーンの作成
+        const scenes = {};
+        
+        // カメラの設定
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2, 5);
+        
+        // プレイヤーの設定
+        const player = {
+            model: null,
+            speed: 0.1,
+            turnSpeed: 0.05,
+            direction: new THREE.Vector3(0, 0, -1),
+            position: new THREE.Vector3(0, 0, 0),
+            canShoot: true,
+            shootCooldown: 500,  // ミリ秒
+            lastShootTime: 0,
+            height: 1.7,
+            radius: 0.5,
+            gun: null
+        };
+
+        // 弾丸クラス
+        class Bullet {
+            constructor(position, direction) {
+                this.position = position.clone();
+                this.direction = direction.normalize();
+                this.speed = 0.5;
+                this.lifeTime = 2000; // ミリ秒
+                this.createTime = Date.now();
+                
+                // 弾丸のメッシュ
+                const geometry = new THREE.SphereGeometry(0.05, 8, 8);
+                const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.copy(this.position);
+                gameState.currentRoom.add(this.mesh);
             }
             
-            enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+            update() {
+                if (Date.now() - this.createTime > this.lifeTime) {
+                    return false; // 弾丸の寿命が尽きた
+                }
+                
+                this.position.addScaledVector(this.direction, this.speed);
+                this.mesh.position.copy(this.position);
+                
+                return true; // 弾丸はまだ有効
+            }
             
-            // 頭部の追加
-            const headGeometry = new THREE.SphereGeometry(1.5, 16, 16);
-            const headMaterial = new THREE.MeshLambertMaterial({ color: 0xffcccc });
-            const head = new THREE.Mesh(headGeometry, headMaterial);
-            head.position.y = 4;
-            enemy.add(head);
-            
-            return enemy;
+            remove() {
+                gameState.currentRoom.remove(this.mesh);
+            }
         }
-        
-        // ============================================================
-        // ゲーム変数
-        // ============================================================
-        // ゲーム変数
-        let camera, scene, renderer;
-        let castle, enemies = [];
-        let bullets = []; // 弾丸の配列
-        let effects = []; // エフェクトの配列
-        let clock = new THREE.Clock();
-        let gameTime = 30; // 30秒のゲーム時間
-        let score = 0;
-        let isGameRunning = false;
-        let raycaster, mouse;
-        let mixers = []; // アニメーションミキサー
-        
-        // センサー調整用の変数
-        let initialBeta = 0;
-        let initialGamma = 0;
-        let initialAlpha = 0;
-        let isSensorCalibrated = false;
-        let deviceHasOrientation = false; // デバイスが方向センサーを持っているかどうか
 
-        // サウンド効果
-        const sounds = {
-            gunshot: new Howl({
-                src: ['https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js'], // ダミーURL（実際はプロジェクトに音源を追加する必要があります）
-                volume: 0.5
-            }),
-            enemyDeath: new Howl({
-                src: ['https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js'], // ダミーURL
-                volume: 0.5
-            }),
-            gameStart: new Howl({
-                src: ['https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js'], // ダミーURL
-                volume: 0.5
-            }),
-            gameOver: new Howl({
-                src: ['https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js'], // ダミーURL
-                volume: 0.7
-            })
-        };
+        // ゾンビクラス
+        class Zombie {
+            constructor(position) {
+                try {
+                    this.position = position.clone();
+                    this.speed = 0.02 + Math.random() * 0.02;
+                    this.health = 100;
+                    this.isDead = false;
+                    
+                    // ゾンビのモデル（仮のボックス）
+                    const geometry = new THREE.BoxGeometry(0.8, 1.8, 0.5);
+                    const material = new THREE.MeshPhongMaterial({ color: 0x00aa00 });
+                    this.mesh = new THREE.Mesh(geometry, material);
+                    this.mesh.position.copy(this.position);
+                    this.mesh.position.y = 0.9; // 地面からの高さ調整
+                    this.mesh.castShadow = true;
+                    this.mesh.receiveShadow = true;
+                    
+                    if (!gameState.currentRoom) {
+                        console.error("現在の部屋が設定されていません");
+                        return;
+                    }
+                    
+                    gameState.currentRoom.add(this.mesh);
+                    
+                    // 腕を追加
+                    const armGeometry = new THREE.BoxGeometry(0.2, 0.7, 0.2);
+                    const armMaterial = new THREE.MeshPhongMaterial({ color: 0x009900 });
+                    
+                    this.leftArm = new THREE.Mesh(armGeometry, armMaterial);
+                    this.leftArm.position.set(-0.5, 0, 0);
+                    this.leftArm.castShadow = true;
+                    this.mesh.add(this.leftArm);
+                    
+                    this.rightArm = new THREE.Mesh(armGeometry, armMaterial);
+                    this.rightArm.position.set(0.5, 0, 0);
+                    this.rightArm.castShadow = true;
+                    this.mesh.add(this.rightArm);
+                    
+                    // 頭を追加
+                    const headGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+                    const headMaterial = new THREE.MeshPhongMaterial({ color: 0x008800 });
+                    this.head = new THREE.Mesh(headGeometry, headMaterial);
+                    this.head.position.set(0, 0.7, 0);
+                    this.head.castShadow = true;
+                    this.mesh.add(this.head);
+                } catch (error) {
+                    console.error("ゾンビの作成中にエラーが発生しました:", error);
+                }
+            }
+            
+            update() {
+                if (this.isDead) return false;
+                
+                // プレイヤーの方向に向かって移動
+                const directionToPlayer = new THREE.Vector3()
+                    .subVectors(player.position, this.position)
+                    .normalize();
+                
+                this.position.addScaledVector(directionToPlayer, this.speed);
+                this.mesh.position.x = this.position.x;
+                this.mesh.position.z = this.position.z;
+                
+                // プレイヤーの方を向く
+                this.mesh.lookAt(player.position.x, this.mesh.position.y, player.position.z);
+                
+                // 腕を振る動作
+                const time = Date.now() * 0.003;
+                this.leftArm.rotation.x = Math.sin(time) * 0.5;
+                this.rightArm.rotation.x = Math.sin(time + Math.PI) * 0.5;
+                
+                // プレイヤーとの衝突判定
+                const distanceToPlayer = this.position.distanceTo(player.position);
+                if (distanceToPlayer < player.radius + 0.5) {
+                    // プレイヤーにダメージ
+                    gameState.health -= 0.5;
+                    if (gameState.health <= 0) {
+                        gameState.health = 0;
+                        // ゲームオーバー処理
+                        displayGameOver();
+                    }
+                    updateHealthBar();
+                }
+                
+                return true;
+            }
+            
+            takeDamage(damage) {
+                this.health -= damage;
+                if (this.health <= 0) {
+                    this.die();
+                    return true;
+                }
+                return false;
+            }
+            
+            die() {
+                this.isDead = true;
+                gameState.zombiesKilled++;
+                
+                // 死亡アニメーション（単純に消える）
+                gameState.currentRoom.remove(this.mesh);
+            }
+        }
 
-        // ゲーム初期化
-        function init() {
-            // シーンの作成
-            scene = new THREE.Scene();
+        // 弾丸の配列
+        const bullets = [];
+        
+        // ゾンビの配列
+        const zombies = [];
+        
+        // 部屋の作成
+        function createRoom(roomId, width, length, doorPositions) {
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111111);
             
-            // カメラの設定
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 50, 0); // 天守閣の頂上を想定
+            // 部屋の床
+            const floorGeometry = new THREE.PlaneGeometry(width, length);
+            const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x555555, side: THREE.DoubleSide });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
             
-            // レンダラーの設定
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            document.body.appendChild(renderer.domElement);
+            // 部屋の壁
+            const wallMaterial = new THREE.MeshPhongMaterial({ color: 0x777777 });
             
-            // 光源の追加
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            // 奥の壁
+            const backWallGeometry = new THREE.BoxGeometry(width, 4, 0.2);
+            const backWall = new THREE.Mesh(backWallGeometry, wallMaterial);
+            backWall.position.set(0, 2, -length/2);
+            backWall.castShadow = true;
+            backWall.receiveShadow = true;
+            scene.add(backWall);
+            
+            // 手前の壁
+            const frontWallGeometry = new THREE.BoxGeometry(width, 4, 0.2);
+            const frontWall = new THREE.Mesh(frontWallGeometry, wallMaterial);
+            frontWall.position.set(0, 2, length/2);
+            frontWall.castShadow = true;
+            frontWall.receiveShadow = true;
+            scene.add(frontWall);
+            
+            // 左の壁
+            const leftWallGeometry = new THREE.BoxGeometry(0.2, 4, length);
+            const leftWall = new THREE.Mesh(leftWallGeometry, wallMaterial);
+            leftWall.position.set(-width/2, 2, 0);
+            leftWall.castShadow = true;
+            leftWall.receiveShadow = true;
+            scene.add(leftWall);
+            
+            // 右の壁
+            const rightWallGeometry = new THREE.BoxGeometry(0.2, 4, length);
+            const rightWall = new THREE.Mesh(rightWallGeometry, wallMaterial);
+            rightWall.position.set(width/2, 2, 0);
+            rightWall.castShadow = true;
+            rightWall.receiveShadow = true;
+            scene.add(rightWall);
+            
+            // 天井
+            const ceilingGeometry = new THREE.PlaneGeometry(width, length);
+            const ceilingMaterial = new THREE.MeshPhongMaterial({ color: 0x555555, side: THREE.DoubleSide });
+            const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 4;
+            ceiling.receiveShadow = true;
+            scene.add(ceiling);
+            
+            // ドアの作成
+            const doors = [];
+            doorPositions.forEach(doorData => {
+                // ドアの枠
+                const doorFrameGeometry = new THREE.BoxGeometry(2, 3, 0.3);
+                const doorFrameMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+                const doorFrame = new THREE.Mesh(doorFrameGeometry, doorFrameMaterial);
+                doorFrame.position.copy(doorData.position);
+                doorFrame.rotation.y = doorData.rotation || 0;
+                scene.add(doorFrame);
+                
+                // ドア自体
+                const doorGeometry = new THREE.BoxGeometry(1.6, 2.6, 0.1);
+                const doorMaterial = new THREE.MeshPhongMaterial({ color: 0x3c2a1e });
+                const door = new THREE.Mesh(doorGeometry, doorMaterial);
+                door.position.copy(doorData.position);
+                door.position.z += 0.1; // ドア枠の前に配置
+                door.rotation.y = doorData.rotation || 0;
+                door.userData = {
+                    isDoor: true,
+                    targetRoom: doorData.targetRoom,
+                    targetPosition: doorData.targetPosition,
+                    targetRotation: doorData.targetRotation
+                };
+                scene.add(door);
+                doors.push(door);
+            });
+            
+            // 光源の設定
+            const ambientLight = new THREE.AmbientLight(0x404040);
             scene.add(ambientLight);
             
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(1, 1, 1);
-            scene.add(directionalLight);
+            const pointLight = new THREE.PointLight(0xffffff, 1, 20);
+            pointLight.position.set(0, 3, 0);
+            pointLight.castShadow = true;
+            scene.add(pointLight);
             
-            // GLTFローダーの初期化
-            gltfLoader = new THREE.GLTFLoader();
+            // 部屋情報を返す
+            return {
+                scene: scene,
+                doors: doors,
+                width: width,
+                length: length
+            };
+        }
+        
+        // 部屋の初期化
+        function initRooms() {
+            // 部屋1
+            scenes.room1 = createRoom("room1", 10, 10, [
+                { 
+                    position: new THREE.Vector3(0, 1.5, 5), 
+                    rotation: 0, 
+                    targetRoom: "room2",
+                    targetPosition: new THREE.Vector3(0, 0, -4),
+                    targetRotation: 0
+                }
+            ]);
             
-            // 城の作成
-            createCastle();
+            // 部屋2
+            scenes.room2 = createRoom("room2", 12, 10, [
+                { 
+                    position: new THREE.Vector3(0, 1.5, -5), 
+                    rotation: 0, 
+                    targetRoom: "room1",
+                    targetPosition: new THREE.Vector3(0, 0, 4),
+                    targetRotation: Math.PI
+                },
+                { 
+                    position: new THREE.Vector3(6, 1.5, 0), 
+                    rotation: Math.PI / 2, 
+                    targetRoom: "room3",
+                    targetPosition: new THREE.Vector3(-4, 0, 0),
+                    targetRotation: Math.PI / 2
+                }
+            ]);
             
-            // レイキャスターとマウス初期化
-            raycaster = new THREE.Raycaster();
-            mouse = new THREE.Vector2();
+            // 部屋3
+            scenes.room3 = createRoom("room3", 10, 15, [
+                { 
+                    position: new THREE.Vector3(-5, 1.5, 0), 
+                    rotation: Math.PI / 2, 
+                    targetRoom: "room2",
+                    targetPosition: new THREE.Vector3(5, 0, 0),
+                    targetRotation: -Math.PI / 2
+                },
+                { 
+                    position: new THREE.Vector3(0, 1.5, 7.5), 
+                    rotation: 0, 
+                    targetRoom: "room4",
+                    targetPosition: new THREE.Vector3(0, 0, -7.5),
+                    targetRotation: 0
+                }
+            ]);
             
-            // イベントリスナー
-            window.addEventListener('resize', onWindowResize, false);
-            window.addEventListener('click', onMouseClick, false);
+            // 部屋4（ボス部屋）
+            scenes.room4 = createRoom("room4", 16, 16, [
+                { 
+                    position: new THREE.Vector3(0, 1.5, -8), 
+                    rotation: 0, 
+                    targetRoom: "room3",
+                    targetPosition: new THREE.Vector3(0, 0, 6.5),
+                    targetRotation: Math.PI
+                }
+            ]);
+        }
+        
+        // プレイヤーモデルの作成
+        function createPlayerModel() {
+            // プレイヤーの体
+            const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.3, 1.2, 8);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x0000aa });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 0.6;
+            body.castShadow = true;
             
-            // デバイスの向きの変化を検知 - 権限が必要な場合に対応
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                // iOS 13+ では権限リクエストが必要
-                document.getElementById('startButton').addEventListener('click', () => {
-                    DeviceOrientationEvent.requestPermission()
-                        .then(permissionState => {
-                            if (permissionState === 'granted') {
-                                window.addEventListener('deviceorientation', onDeviceOrientation, false);
-                                startGame();
-                            } else {
-                                alert('動きを検知するには方向センサーへのアクセスを許可してください。');
-                            }
-                        })
-                        .catch(console.error);
+            // プレイヤーの頭
+            const headGeometry = new THREE.SphereGeometry(0.25, 16, 16);
+            const headMaterial = new THREE.MeshPhongMaterial({ color: 0xffdddd });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.y = 1.4;
+            head.castShadow = true;
+            
+            // プレイヤーのグループ
+            const playerGroup = new THREE.Group();
+            playerGroup.add(body);
+            playerGroup.add(head);
+            
+            // 銃のモデル
+            const gunGroup = new THREE.Group();
+            
+            const gunBarrelGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.4);
+            const gunMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const gunBarrel = new THREE.Mesh(gunBarrelGeometry, gunMaterial);
+            gunBarrel.position.z = -0.3;
+            gunGroup.add(gunBarrel);
+            
+            const gunHandleGeometry = new THREE.BoxGeometry(0.1, 0.2, 0.1);
+            const gunHandle = new THREE.Mesh(gunHandleGeometry, gunMaterial);
+            gunHandle.position.y = -0.15;
+            gunGroup.add(gunHandle);
+            
+            gunGroup.position.set(0.5, 1.1, -0.2);
+            playerGroup.add(gunGroup);
+            
+            player.gun = gunGroup;
+            player.model = playerGroup;
+            
+            return playerGroup;
+        }
+        
+        // 部屋の切り替え
+        function changeRoom(targetRoomId, targetPosition, targetRotation) {
+            gameState.isTransitioning = true;
+            
+            // ドアのアニメーション表示
+            const doorTransition = document.getElementById('door-transition');
+            const doorAnimation = document.getElementById('door-animation');
+            const doorLeft = document.querySelector('.door-left');
+            const doorRight = document.querySelector('.door-right');
+            const doorText = document.getElementById('door-text');
+            
+            doorTransition.style.display = 'flex';
+            doorAnimation.style.display = 'block';
+            doorText.textContent = 'ドアを開いています...';
+            
+            // ドアを開くアニメーション
+            setTimeout(() => {
+                doorLeft.style.transform = 'rotateY(90deg)';
+                doorRight.style.transform = 'rotateY(-90deg)';
+                doorText.textContent = 'ドアを通過中...';
+            }, 500);
+            
+            // 部屋の切り替え
+            setTimeout(() => {
+                // 現在の部屋からプレイヤーモデルを削除
+                if (gameState.currentRoom) {
+                    gameState.currentRoom.remove(player.model);
+                }
+                
+                // 弾丸を削除
+                bullets.forEach(bullet => {
+                    if (bullet.mesh && bullet.mesh.parent) {
+                        bullet.mesh.parent.remove(bullet.mesh);
+                    }
                 });
-            } else {
-                // 通常のデバイス（Android など）
-                window.addEventListener('deviceorientation', onDeviceOrientation, false);
-                document.getElementById('startButton').addEventListener('click', startGame);
+                bullets.length = 0;
+                
+                // ゾンビを削除
+                zombies.forEach(zombie => {
+                    if (zombie.mesh && zombie.mesh.parent) {
+                        zombie.mesh.parent.remove(zombie.mesh);
+                    }
+                });
+                zombies.length = 0;
+                
+                // 新しい部屋にプレイヤーを追加
+                const targetRoom = scenes[targetRoomId];
+                gameState.currentRoom = targetRoom.scene;
+                gameState.currentRoom.add(player.model);
+                
+                // プレイヤーの位置と向きを設定
+                player.position.copy(targetPosition);
+                player.model.position.copy(player.position);
+                
+                // プレイヤーの向きを設定
+                player.direction.set(Math.sin(targetRotation), 0, Math.cos(targetRotation)).normalize();
+                player.model.rotation.y = targetRotation;
+                
+                // ゾンビの生成（部屋ごとに異なる数）
+                const zombieCount = targetRoomId === 'room4' ? 5 : Math.floor(Math.random() * 3) + 1;
+                for (let i = 0; i < zombieCount; i++) {
+                    // ランダムな位置にゾンビを生成（プレイヤーから少し離れた位置）
+                    let zombieX, zombieZ;
+                    do {
+                        zombieX = (Math.random() - 0.5) * (targetRoom.width - 2);
+                        zombieZ = (Math.random() - 0.5) * (targetRoom.length - 2);
+                    } while (
+                        Math.abs(zombieX - player.position.x) < 3 && 
+                        Math.abs(zombieZ - player.position.z) < 3
+                    );
+                    
+                    const zombiePosition = new THREE.Vector3(zombieX, 0, zombieZ);
+                    const zombie = new Zombie(zombiePosition);
+                    zombies.push(zombie);
+                }
+                
+                // カメラをプレイヤーの後ろに配置
+                updateCameraPosition();
+                
+                // ドアを閉じるアニメーション
+                doorText.textContent = 'ドアを閉じています...';
+                doorLeft.style.transform = 'rotateY(0deg)';
+                doorRight.style.transform = 'rotateY(0deg)';
+            }, 2000);
+            
+            // トランジション終了
+            setTimeout(() => {
+                doorAnimation.style.display = 'none';
+                doorTransition.style.display = 'none';
+                gameState.isTransitioning = false;
+            }, 3500);
+        }
+        
+        // プレイヤーの更新
+        function updatePlayer() {
+            if (gameState.isTransitioning) return;
+            
+            let moveX = 0;
+            let moveZ = 0;
+            
+            // 方向ベクトルの計算
+            if (keyState.w) moveZ -= 1;
+            if (keyState.s) moveZ += 1;
+            if (keyState.a) moveX -= 1;
+            if (keyState.d) moveX += 1;
+            
+            if (moveX !== 0 || moveZ !== 0) {
+                // 正規化して斜め移動が速くなりすぎないようにする
+                const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
+                moveX /= length;
+                moveZ /= length;
+                
+                // プレイヤーの向きを変更
+                player.direction.set(moveX, 0, moveZ).normalize();
+                player.model.rotation.y = Math.atan2(moveX, moveZ);
+                
+                // 移動
+                const newX = player.position.x + moveX * player.speed;
+                const newZ = player.position.z + moveZ * player.speed;
+                
+                // 壁との衝突判定
+                const currentRoom = scenes[Object.keys(scenes).find(id => scenes[id].scene === gameState.currentRoom)];
+                const halfWidth = currentRoom.width / 2 - player.radius;
+                const halfLength = currentRoom.length / 2 - player.radius;
+                
+                // X座標の制限
+                if (newX > -halfWidth && newX < halfWidth) {
+                    player.position.x = newX;
+                }
+                
+                // Z座標の制限
+                if (newZ > -halfLength && newZ < halfLength) {
+                    player.position.z = newZ;
+                }
+                
+                player.model.position.copy(player.position);
             }
             
-            // 位置合わせボタンの設定
-            document.getElementById('calibrateButton').addEventListener('click', () => {
-                // 最新のセンサー値で校正
-                if (deviceHasOrientation) {
-                    // 次のデバイスセンサーイベントで校正
-                    isSensorCalibrated = false;
-                } else {
-                    alert('方向センサーが検出されませんでした。デバイスがジャイロセンサーをサポートしているか確認してください。');
+            // 銃の発射処理
+            if (keyState.shift && player.canShoot && gameState.ammo > 0) {
+                const now = Date.now();
+                if (now - player.lastShootTime > player.shootCooldown) {
+                    player.lastShootTime = now;
+                    
+                    // 弾丸を発射
+                    const bulletPosition = new THREE.Vector3()
+                        .copy(player.position)
+                        .add(new THREE.Vector3(
+                            player.direction.x * 0.5,
+                            player.height * 0.8,
+                            player.direction.z * 0.5
+                        ));
+                    
+                    const bullet = new Bullet(bulletPosition, player.direction);
+                    bullets.push(bullet);
+                    
+                    // 弾数を減らす
+                    gameState.ammo--;
+                    updateAmmoCounter();
+                    
+                    // 発射エフェクト（銃を少し後ろに下げる）
+                    player.gun.position.z += 0.05;
+                    setTimeout(() => {
+                        player.gun.position.z -= 0.05;
+                    }, 50);
                 }
+            }
+        }
+        
+        // ゾンビの更新
+        function updateZombies() {
+            for (let i = zombies.length - 1; i >= 0; i--) {
+                const zombie = zombies[i];
+                const isActive = zombie.update();
+                
+                if (!isActive) {
+                    zombies.splice(i, 1);
+                }
+            }
+        }
+        
+        // ゲームオーバー処理
+        function displayGameOver() {
+            const gameOverDiv = document.createElement('div');
+            gameOverDiv.style.position = 'absolute';
+            gameOverDiv.style.top = '0';
+            gameOverDiv.style.left = '0';
+            gameOverDiv.style.width = '100%';
+            gameOverDiv.style.height = '100%';
+            gameOverDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+            gameOverDiv.style.color = '#ff0000';
+            gameOverDiv.style.display = 'flex';
+            gameOverDiv.style.flexDirection = 'column';
+            gameOverDiv.style.justifyContent = 'center';
+            gameOverDiv.style.alignItems = 'center';
+            gameOverDiv.style.zIndex = '100';
+            gameOverDiv.style.fontSize = '32px';
+            gameOverDiv.innerHTML = `
+                <h1>GAME OVER</h1>
+                <p>撃破したゾンビ: ${gameState.zombiesKilled}</p>
+                <button id="restart-button" style="padding: 10px 20px; font-size: 20px; margin-top: 20px; cursor: pointer;">リスタート</button>
+            `;
+            document.body.appendChild(gameOverDiv);
+            
+            document.getElementById('restart-button').addEventListener('click', () => {
+                location.reload();
             });
-            
-            // 発射ボタンの設定
-            document.getElementById('fireButton').addEventListener('click', fireBullet);
-            
-            // リスタートボタンの設定
-            document.getElementById('restartButton').addEventListener('click', restartGame);
-            
-            // アニメーションの開始
-            animate();
         }
         
-        // 城の作成
-        function createCastle() {
-            castle = new THREE.Group();
+        // UI更新関数
+        function updateHealthBar() {
+            const healthFill = document.getElementById('health-fill');
+            const healthPercent = (gameState.health / gameState.maxHealth) * 100;
+            healthFill.style.width = `${healthPercent}%`;
             
-            // 城壁
-            const wallGeometry = new THREE.BoxGeometry(100, 20, 100);
-            const wallMaterial = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
-            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-            wall.position.y = -10;
-            castle.add(wall);
-            
-            // 天守閣
-            const towerGeometry = new THREE.BoxGeometry(20, 30, 20);
-            const towerMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
-            const tower = new THREE.Mesh(towerGeometry, towerMaterial);
-            tower.position.y = 15;
-            castle.add(tower);
-            
-            // 屋根
-            const roofGeometry = new THREE.ConeGeometry(15, 10, 4);
-            const roofMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
-            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
-            roof.position.y = 35;
-            roof.rotation.y = Math.PI / 4;
-            castle.add(roof);
-            
-            scene.add(castle);
-        }
-        
-        // 敵の作成
-        function createEnemy() {
-            // 敵の種類をランダムに決定
-            const enemyTypes = ['soldier', 'archer', 'knight'];
-            const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-            
-            // 敵の初期設定（後でモデルで置き換え）
-            let enemy = new THREE.Group();
-            
-            // 敵の特性設定
-            switch (enemyType) {
-                case 'soldier': // 通常兵士
-                    enemy.userData.speed = 0.15 + Math.random() * 0.2;
-                    enemy.userData.health = 1;
-                    enemy.userData.type = 'soldier';
-                    break;
-                case 'archer': // 弓兵（細くて速い）
-                    enemy.userData.speed = 0.25 + Math.random() * 0.2;
-                    enemy.userData.health = 1;
-                    enemy.userData.type = 'archer';
-                    break;
-                case 'knight': // 重装兵（大きくて遅い）
-                    enemy.userData.speed = 0.08 + Math.random() * 0.1;
-                    enemy.userData.health = 2;
-                    enemy.userData.type = 'knight';
-                    break;
-            }
-            
-            // ランダムな位置（城の周りから）- 敵をグループ化して攻めてくるように調整
-            const baseAngle = (Math.floor(Math.random() * 8) / 8) * Math.PI * 2; // 8方向からグループで攻めてくる
-            const angleVariation = (Math.random() - 0.5) * 0.5; // グループ内での角度のばらつき
-            const angle = baseAngle + angleVariation;
-            const radius = 70 + Math.random() * 20;
-            enemy.position.x = Math.cos(angle) * radius;
-            enemy.position.z = Math.sin(angle) * radius;
-            enemy.position.y = 0;
-            
-            // 敵の方向を設定
-            enemy.userData.direction = new THREE.Vector3(0, 0, 0)
-                .subVectors(new THREE.Vector3(0, 0, 0), enemy.position)
-                .normalize();
-            
-            // GLTFモデルを読み込み、成功したらそのモデルを使用
-            loadModel(enemyType)
-                .then(model => {
-                    // 既存のGROUPにモデルを追加
-                    enemy.add(model);
-                    
-                    // アニメーション設定（モデルにアニメーションがある場合）
-                    if (model.animations && model.animations.length > 0) {
-                        const mixer = new THREE.AnimationMixer(model);
-                        const action = mixer.clipAction(model.animations[0]);
-                        action.play();
-                        enemy.userData.mixer = mixer;
-                        mixers.push(mixer);
-                    }
-                })
-                .catch(error => {
-                    console.error('モデル読み込みエラー:', error);
-                    // モデル読み込み失敗時はフォールバックモデルを使用
-                    const fallbackModel = createFallbackEnemy(enemyType);
-                    enemy.add(fallbackModel);
-                });
-            
-            scene.add(enemy);
-            enemies.push(enemy);
-        }
-        
-        // 敵の更新
-        function updateEnemies(delta) {
-            // 新しい敵の生成（頻度を大幅に上げる - 0.5秒ごとに1~3体）
-            const spawnChance = 0.05 * delta * 60;
-            
-            // enemiesの最大数を制限（パフォーマンス対策）
-            if (enemies.length < 50 && Math.random() < spawnChance) {
-                // 一度に複数の敵を生成
-                const enemyCount = Math.floor(Math.random() * 3) + 1;
-                for (let i = 0; i < enemyCount; i++) {
-                    createEnemy();
-                }
-            }
-            
-            // アニメーションミキサーの更新
-            for (let i = mixers.length - 1; i >= 0; i--) {
-                mixers[i].update(delta);
-            }
-            
-            // 敵の移動
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                const enemy = enemies[i];
-                
-                // モデル読み込み中に削除された可能性をチェック
-                if (!scene.children.includes(enemy)) continue;
-                
-                // 天守閣に向かって移動
-                enemy.position.x += enemy.userData.direction.x * enemy.userData.speed * delta * 60;
-                enemy.position.z += enemy.userData.direction.z * enemy.userData.speed * delta * 60;
-                
-                // 進行方向を向く
-                enemy.lookAt(new THREE.Vector3(0, enemy.position.y, 0));
-                
-                // 天守閣に到達したら削除
-                const distanceToCenter = Math.sqrt(
-                    enemy.position.x * enemy.position.x + 
-                    enemy.position.z * enemy.position.z
-                );
-                
-                if (distanceToCenter < 10) {
-                    // アニメーションミキサーがある場合はリストから削除
-                    if (enemy.userData.mixer) {
-                        const mixerIndex = mixers.indexOf(enemy.userData.mixer);
-                        if (mixerIndex !== -1) {
-                            mixers.splice(mixerIndex, 1);
-                        }
-                    }
-                    
-                    scene.remove(enemy);
-                    enemies.splice(i, 1);
-                }
+            // 体力に応じて色を変更
+            if (healthPercent > 60) {
+                healthFill.style.backgroundColor = '#00cc00';
+            } else if (healthPercent > 30) {
+                healthFill.style.backgroundColor = '#cccc00';
+            } else {
+                healthFill.style.backgroundColor = '#cc0000';
             }
         }
         
-        // ウィンドウリサイズ時の処理
+        function updateAmmoCounter() {
+            const ammoCounter = document.getElementById('ammo-counter');
+            ammoCounter.textContent = `弾数: ${gameState.ammo} / ${gameState.maxAmmo}`;
+        }
+        
+        // ウィンドウのリサイズ処理
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
         
-        // マウスクリック/タップ時の処理
-        function onMouseClick(event) {
-            if (!isGameRunning) return;
-            
-            // 発射ボタンやキャリブレーションボタンがクリックされた場合は弾を発射しない
-            // （バブリングで両方が実行されることを防ぐ）
-            const target = event.target;
-            if (target.id === 'fireButton' || target.id === 'calibrateButton') {
-                return;
+        // キーボード入力処理
+        function onKeyDown(event) {
+            switch (event.key.toLowerCase()) {
+                case 'w': keyState.w = true; break;
+                case 'a': keyState.a = true; break;
+                case 's': keyState.s = true; break;
+                case 'd': keyState.d = true; break;
+                case 'shift': keyState.shift = true; break;
+                case 'e': keyState.e = true; break;
+                case 'r': keyState.r = true; break;
             }
-            
-            // クリック位置を正規化
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-            
-            // レイキャスト
-            raycaster.setFromCamera(mouse, camera);
-            
-            // 弾丸を発射
-            fireBullet();
         }
         
-        // 弾を発射する
-        function fireBullet() {
-            if (!isGameRunning) return;
-            
-            // 弾丸を生成して発射
-            createBullet();
-            
-            // カメラからのレイキャスト（中央から撃つ）
-            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-            
-            // 敵との当たり判定
-            const intersects = raycaster.intersectObjects(enemies);
-            
-            if (intersects.length > 0) {
-                // 敵にヒット
-                const hitEnemy = intersects[0].object;
-                let enemyRoot = hitEnemy;
+        function onKeyUp(event) {
+            switch (event.key.toLowerCase()) {
+                case 'w': keyState.w = false; break;
+                case 'a': keyState.a = false; break;
+                case 's': keyState.s = false; break;
+                case 'd': keyState.d = false; break;
+                case 'shift': keyState.shift = false; break;
+                case 'e': keyState.e = false; break;
+                case 'r': keyState.r = false; break;
+            }
+        }
+        
+        // ゲームの初期化
+        function initGame() {
+            try {
+                console.log("ゲーム初期化開始");
                 
-                // グループの親オブジェクトを見つける
-                while (enemyRoot.parent && !enemies.includes(enemyRoot)) {
-                    enemyRoot = enemyRoot.parent;
-                }
+                // 部屋の作成
+                console.log("部屋を初期化中...");
+                initRooms();
                 
-                if (enemies.includes(enemyRoot)) {
-                    // 敵のヘルスを減らす
-                    if (!enemyRoot.userData.health) enemyRoot.userData.health = 1;
-                    enemyRoot.userData.health--;
-                    
-                    if (enemyRoot.userData.health <= 0) {
-                        // 敵を倒した
-                        // アニメーションミキサーがある場合はリストから削除
-                        if (enemyRoot.userData.mixer) {
-                            const mixerIndex = mixers.indexOf(enemyRoot.userData.mixer);
-                            if (mixerIndex !== -1) {
-                                mixers.splice(mixerIndex, 1);
-                            }
-                        }
-                        
-                        scene.remove(enemyRoot);
-                        enemies.splice(enemies.indexOf(enemyRoot), 1);
-                        score++;
-                        updateScore();
-                    } else {
-                        // 敵にダメージを与えた（モデルの場合は色を変えるのが難しいので、エフェクトだけ）
-                        // ダメージエフェクト
-                        const children = enemyRoot.children;
-                        for (let i = 0; i < children.length; i++) {
-                            if (children[i].material) {
-                                // 一時的に赤く光らせる
-                                const originalColor = children[i].material.color.clone();
-                                children[i].material.emissive = new THREE.Color(0xff0000);
-                                
-                                // 0.3秒後に元に戻す
-                                setTimeout(() => {
-                                    if (children[i].material) {
-                                        children[i].material.emissive = new THREE.Color(0x000000);
-                                    }
-                                }, 300);
-                            }
-                        }
-                    }
-                    
-                    // ヒットエフェクト
-                    createHitEffect(intersects[0].point);
-                    
-                    // サウンド効果
-                    sounds.gunshot.play();
-                    sounds.enemyDeath.play();
-                }
-            } else {
-                // ミス
-                sounds.gunshot.play();
-            }
-            
-            // ボタンのアニメーション効果
-            const fireButton = document.getElementById('fireButton');
-            fireButton.style.transform = 'scale(0.9)';
-            setTimeout(() => {
-                fireButton.style.transform = 'scale(1)';
-            }, 100);
-        }
-        
-        // 弾丸を生成
-        function createBullet() {
-            // 弾丸のジオメトリとマテリアル
-            const bulletGeometry = new THREE.SphereGeometry(0.5, 16, 16);
-            const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
-            const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
-            
-            // カメラの位置と向きに基づいて弾丸を配置
-            bullet.position.copy(camera.position);
-            
-            // 弾丸の飛ぶ方向を計算
-            const bulletDirection = new THREE.Vector3(0, 0, -1);
-            bulletDirection.applyQuaternion(camera.quaternion);
-            bullet.userData.direction = bulletDirection;
-            bullet.userData.speed = 3;
-            bullet.userData.lifeTime = 2; // 弾丸の寿命（秒）
-            bullet.userData.elapsedTime = 0;
-            
-            // 弾丸光の追加
-            const bulletLight = new THREE.PointLight(0xFFFF00, 1, 10);
-            bullet.add(bulletLight);
-            
-            // 弾丸の軌跡を表現するトレイル
-            const trailGeometry = new THREE.BufferGeometry();
-            const trailMaterial = new THREE.LineBasicMaterial({ color: 0xFFFF00, opacity: 0.5, transparent: true });
-            const trailPositions = [];
-            for (let i = 0; i < 20; i++) {
-                trailPositions.push(bullet.position.x, bullet.position.y, bullet.position.z);
-            }
-            trailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(trailPositions, 3));
-            const trail = new THREE.Line(trailGeometry, trailMaterial);
-            bullet.userData.trail = trail;
-            
-            scene.add(bullet);
-            scene.add(trail);
-            
-            bullets.push(bullet);
-        }
-        
-        // ヒットエフェクトを生成
-        function createHitEffect(position) {
-            const particleGeometry = new THREE.BufferGeometry();
-            const particleCount = 20;
-            const particlePositions = new Float32Array(particleCount * 3);
-            
-            for (let i = 0; i < particleCount; i++) {
-                particlePositions[i * 3] = position.x;
-                particlePositions[i * 3 + 1] = position.y;
-                particlePositions[i * 3 + 2] = position.z;
-            }
-            
-            particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-            
-            const particleMaterial = new THREE.PointsMaterial({
-                color: 0xFF5500,
-                size: 1,
-                transparent: true,
-                opacity: 1
-            });
-            
-            const particles = new THREE.Points(particleGeometry, particleMaterial);
-            
-            // パーティクルに速度を設定
-            particles.userData.velocities = [];
-            for (let i = 0; i < particleCount; i++) {
-                particles.userData.velocities.push({
-                    x: (Math.random() - 0.5) * 0.5,
-                    y: (Math.random() - 0.5) * 0.5,
-                    z: (Math.random() - 0.5) * 0.5
-                });
-            }
-            
-            particles.userData.elapsedTime = 0;
-            particles.userData.lifeTime = 1; // 1秒間表示
-            
-            scene.add(particles);
-            effects.push(particles);
-        }
-        
-        // デバイスの向きに応じてカメラを回転
-        function onDeviceOrientation(event) {
-            if (!isGameRunning) return;
-            
-            // デバイスがセンサーを持っていることを確認
-            if (event.beta !== null && event.gamma !== null && event.alpha !== null) {
-                deviceHasOrientation = true;
+                // プレイヤーモデルの作成
+                console.log("プレイヤーモデルを作成中...");
+                createPlayerModel();
                 
-                const beta = event.beta;   // X軸周りの回転（-180〜180）
-                const gamma = event.gamma; // Y軸周りの回転（-90〜90）
-                const alpha = event.alpha; // Z軸周りの回転（0〜360）
+                // 最初の部屋を設定
+                console.log("最初の部屋を設定中...");
+                gameState.currentRoom = scenes.room1.scene;
+                gameState.currentRoom.add(player.model);
+                player.position.set(0, 0, 0);
+                player.model.position.copy(player.position);
                 
-                // センサーが校正されていない場合は初期値として設定
-                if (!isSensorCalibrated) {
-                    calibrateSensors(beta, gamma, alpha);
-                }
+                // ゾンビの生成（最初の部屋は1体のみ）
+                console.log("ゾンビを生成中...");
+                const zombie = new Zombie(new THREE.Vector3(3, 0, -3));
+                zombies.push(zombie);
                 
-                // 初期値からの相対的な変化を計算
-                const adjustedBeta = beta - initialBeta;
-                const adjustedGamma = gamma - initialGamma;
-                // Z軸回転（alpha）は円環状なので特別な処理
-                let adjustedAlpha = alpha - initialAlpha;
-                if (adjustedAlpha > 180) adjustedAlpha -= 360;
-                if (adjustedAlpha < -180) adjustedAlpha += 360;
+                // イベントリスナーの設定
+                console.log("イベントリスナーを設定中...");
+                window.addEventListener('resize', onWindowResize);
+                window.addEventListener('keydown', onKeyDown);
+                window.addEventListener('keyup', onKeyUp);
                 
-                // ベータ値（前後の傾き）を制限
-                const restrictedBeta = Math.max(-60, Math.min(60, adjustedBeta));
+                // ロード完了
+                console.log("ロード完了");
+                gameState.isLoading = false;
+                document.getElementById('loading-screen').style.display = 'none';
                 
-                // カメラの回転を設定（より敏感に反応するように係数を調整）
-                camera.rotation.x = THREE.MathUtils.degToRad(restrictedBeta * 1.5);
-                camera.rotation.y = THREE.MathUtils.degToRad(-adjustedGamma * 1.5);
-                camera.rotation.z = THREE.MathUtils.degToRad(adjustedAlpha * 0.5); // Z軸の回転は弱めに
-                
-                // lookAtを使用して視点を更新
-                const lookAtTarget = new THREE.Vector3(
-                    Math.sin(THREE.MathUtils.degToRad(-adjustedGamma * 1.5)) * 50,
-                    Math.sin(THREE.MathUtils.degToRad(restrictedBeta * 1.5)) * 30,
-                    -Math.cos(THREE.MathUtils.degToRad(-adjustedGamma * 1.5)) * 50
-                );
-                camera.lookAt(lookAtTarget);
-                
-                // デバッグ情報（開発時に便利）
-                // console.log(`Beta: ${adjustedBeta.toFixed(2)}, Gamma: ${adjustedGamma.toFixed(2)}, Alpha: ${adjustedAlpha.toFixed(2)}`);
+                // アニメーションループの開始
+                console.log("アニメーション開始");
+                animate();
+            } catch (error) {
+                console.error("ゲーム初期化中にエラーが発生しました:", error);
+                alert("ゲームの読み込み中にエラーが発生しました。ページを更新してください。");
             }
         }
         
-        // センサーを校正
-        function calibrateSensors(beta, gamma, alpha) {
-            initialBeta = beta;
-            initialGamma = gamma;
-            initialAlpha = alpha;
-            isSensorCalibrated = true;
-            
-            console.log(`センサー校正完了: Beta=${initialBeta.toFixed(2)}, Gamma=${initialGamma.toFixed(2)}, Alpha=${initialAlpha.toFixed(2)}`);
-            
-            // 校正完了のフィードバック
-            const calibrationMessage = document.createElement('div');
-            calibrationMessage.textContent = '位置合わせ完了!';
-            calibrationMessage.style.position = 'absolute';
-            calibrationMessage.style.top = '50%';
-            calibrationMessage.style.left = '50%';
-            calibrationMessage.style.transform = 'translate(-50%, -50%)';
-            calibrationMessage.style.backgroundColor = 'rgba(0, 150, 0, 0.7)';
-            calibrationMessage.style.color = 'white';
-            calibrationMessage.style.padding = '15px';
-            calibrationMessage.style.borderRadius = '10px';
-            calibrationMessage.style.zIndex = '1000';
-            
-            document.body.appendChild(calibrationMessage);
-            
-            // 2秒後にメッセージを削除
-            setTimeout(() => {
-                document.body.removeChild(calibrationMessage);
-            }, 2000);
-        }
-        
-        // ゲームの開始
-        function startGame() {
-            document.getElementById('startButton').style.display = 'none';
-            document.getElementById('crosshair').style.display = 'block';
-            document.getElementById('calibrateButton').style.display = 'block';
-            document.getElementById('fireButton').style.display = 'block';
-            isGameRunning = true;
-            gameTime = 30;
-            score = 0;
-            updateScore();
-            updateTimer();
-            
-            // センサーの校正をリセット
-            isSensorCalibrated = false;
-            
-            // 既存の敵をクリア
-            for (const enemy of enemies) {
-                scene.remove(enemy);
-            }
-            enemies = [];
-            
-            // 既存の弾丸をクリア
-            for (const bullet of bullets) {
-                scene.remove(bullet);
-                if (bullet.userData.trail) {
-                    scene.remove(bullet.userData.trail);
-                }
-            }
-            bullets = [];
-            
-            // 既存のエフェクトをクリア
-            for (const effect of effects) {
-                scene.remove(effect);
-            }
-            effects = [];
-            
-            // カメラの位置をリセット
-            camera.position.set(0, 50, 0);
-            camera.rotation.set(0, 0, 0);
-            camera.lookAt(0, 0, -100);
-            
-            // サウンド効果
-            sounds.gameStart.play();
-            
-            // ARの許可を要求
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-                    .then(function(stream) {
-                        const video = document.createElement('video');
-                        video.srcObject = stream;
-                        video.play();
-                        
-                        const texture = new THREE.VideoTexture(video);
-                        scene.background = texture;
-                    })
-                    .catch(function(error) {
-                        console.error('ARの初期化に失敗しました:', error);
-                        // ARが使えない場合は代替背景を設定
-                        scene.background = new THREE.Color(0x87CEEB);
-                    });
-            }
-            
-            // 1秒後に位置合わせを促すメッセージを表示
-            setTimeout(() => {
-                if (!isSensorCalibrated && deviceHasOrientation) {
-                    const calibrationPrompt = document.createElement('div');
-                    calibrationPrompt.textContent = 'タブレットを水平にして「位置合わせ」ボタンを押してください';
-                    calibrationPrompt.style.position = 'absolute';
-                    calibrationPrompt.style.bottom = '70px';
-                    calibrationPrompt.style.right = '20px';
-                    calibrationPrompt.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-                    calibrationPrompt.style.color = 'white';
-                    calibrationPrompt.style.padding = '10px';
-                    calibrationPrompt.style.borderRadius = '5px';
-                    calibrationPrompt.style.zIndex = '1000';
-                    calibrationPrompt.id = 'calibrationPrompt';
-                    
-                    document.body.appendChild(calibrationPrompt);
-                    
-                    // 5秒後にメッセージを消す
-                    setTimeout(() => {
-                        const prompt = document.getElementById('calibrationPrompt');
-                        if (prompt) {
-                            document.body.removeChild(prompt);
-                        }
-                    }, 5000);
-                }
-            }, 1000);
-        }
-        
-        // ゲームの再開
-        function restartGame() {
-            document.getElementById('gameOver').style.display = 'none';
-            startGame();
-        }
-        
-        // スコアの更新
-        function updateScore() {
-            document.getElementById('score').textContent = `スコア: ${score}`;
-            document.getElementById('finalScore').textContent = score;
-        }
-        
-        // タイマーの更新
-        function updateTimer() {
-            document.getElementById('timer').textContent = `残り時間: ${Math.ceil(gameTime)}秒`;
-        }
-        
-        // ゲーム終了
-        function endGame() {
-            isGameRunning = false;
-            document.getElementById('gameOver').style.display = 'block';
-            document.getElementById('crosshair').style.display = 'none';
-            document.getElementById('calibrateButton').style.display = 'none';
-            document.getElementById('fireButton').style.display = 'none';
-            
-            // 校正プロンプトが残っていたら削除
-            const prompt = document.getElementById('calibrationPrompt');
-            if (prompt) {
-                document.body.removeChild(prompt);
-            }
-            
-            // サウンド効果
-            sounds.gameOver.play();
-        }
-        
-        // アニメーション
+        // アニメーションループ
         function animate() {
             requestAnimationFrame(animate);
             
-            const delta = clock.getDelta();
-            
-            if (isGameRunning) {
-                // ゲーム時間の更新
-                gameTime -= delta;
-                updateTimer();
-                
-                if (gameTime <= 0) {
-                    endGame();
-                }
-                
-                // 敵の更新
-                updateEnemies(delta);
-                
-                // 弾丸の更新
-                updateBullets(delta);
-                
-                // エフェクトの更新
-                updateEffects(delta);
+            if (!gameState.isLoading && !gameState.isTransitioning) {
+                updatePlayer();
+                updateCameraPosition();
+                updateBullets();
+                updateZombies();
             }
             
-            renderer.render(scene, camera);
+            renderer.render(gameState.currentRoom, camera);
+        }
+        
+        // ページが完全に読み込まれてから開始
+        window.addEventListener('load', function() {
+            console.log("ページの読み込みが完了しました。ゲームを開始します。");
+            // 少し遅延を入れて確実にDOM要素が利用可能になってから初期化
+            setTimeout(initGame, 500);
+        });
+            
+            // リロード処理
+            if (keyState.r && gameState.ammo < gameState.maxAmmo) {
+                gameState.ammo = gameState.maxAmmo;
+                updateAmmoCounter();
+            }
+            
+            // ドアとの相互作用
+            if (keyState.e && !gameState.isTransitioning) {
+                const currentRoom = scenes[Object.keys(scenes).find(id => scenes[id].scene === gameState.currentRoom)];
+                
+                currentRoom.doors.forEach(door => {
+                    // プレイヤーとドアの距離を計算
+                    const distance = player.position.distanceTo(door.position);
+                    
+                    if (distance < 2) {
+                        // ドアを通過
+                        changeRoom(
+                            door.userData.targetRoom,
+                            door.userData.targetPosition,
+                            door.userData.targetRotation
+                        );
+                    }
+                });
+            }
+        }
+        
+        // カメラの更新
+        function updateCameraPosition() {
+            // プレイヤーの後ろに配置
+            const cameraOffset = new THREE.Vector3()
+                .copy(player.direction)
+                .multiplyScalar(-4) // 後ろに4ユニット
+                .add(new THREE.Vector3(0, 2, 0)); // 上に2ユニット
+            
+            camera.position.copy(player.position).add(cameraOffset);
+            camera.lookAt(
+                player.position.x,
+                player.position.y + player.height * 0.7,
+                player.position.z
+            );
         }
         
         // 弾丸の更新
-        function updateBullets(delta) {
+        function updateBullets() {
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const bullet = bullets[i];
                 
-                // 弾丸の移動
-                bullet.position.x += bullet.userData.direction.x * bullet.userData.speed;
-                bullet.position.y += bullet.userData.direction.y * bullet.userData.speed;
-                bullet.position.z += bullet.userData.direction.z * bullet.userData.speed;
+                // 弾丸の更新
+                const isActive = bullet.update();
                 
-                // 弾丸のトレイル更新
-                const trail = bullet.userData.trail;
-                const positions = trail.geometry.attributes.position.array;
-                
-                // トレイルの位置を更新（最初の点を弾丸の現在位置に）
-                positions[0] = bullet.position.x;
-                positions[1] = bullet.position.y;
-                positions[2] = bullet.position.z;
-                
-                // 残りの点を後ろにシフト
-                for (let j = positions.length - 3; j >= 3; j -= 3) {
-                    positions[j] = positions[j - 3];
-                    positions[j + 1] = positions[j - 2];
-                    positions[j + 2] = positions[j - 1];
-                }
-                
-                trail.geometry.attributes.position.needsUpdate = true;
-                
-                // 弾丸の寿命を減らす
-                bullet.userData.elapsedTime += delta;
-                if (bullet.userData.elapsedTime > bullet.userData.lifeTime) {
-                    scene.remove(bullet);
-                    scene.remove(trail);
+                // 弾丸が寿命を過ぎたら削除
+                if (!isActive) {
+                    bullet.remove();
                     bullets.splice(i, 1);
                     continue;
                 }
                 
-                // 敵との衝突判定
-                for (let j = enemies.length - 1; j >= 0; j--) {
-                    const enemy = enemies[j];
-                    const distance = bullet.position.distanceTo(enemy.position);
+                // ゾンビとの衝突判定
+                for (let j = zombies.length - 1; j >= 0; j--) {
+                    const zombie = zombies[j];
+                    if (zombie.isDead) continue;
                     
-                    if (distance < 3) { // 敵のサイズに応じて調整
-                        // 敵のヘルスを減らす
-                        enemy.userData.health--;
-                        
-                        if (enemy.userData.health <= 0) {
-                            // 敵を倒した
-                            scene.remove(enemy);
-                            enemies.splice(j, 1);
-                            score++;
-                            updateScore();
-                            
-                            // 爆発エフェクト
-                            createHitEffect(enemy.position);
-                            
-                            // サウンド効果
-                            sounds.enemyDeath.play();
-                        } else {
-                            // 敵にダメージを与えた（色を変える）
-                            enemy.material.color.setHex(0xFF6666);
-                            
-                            // ヒットエフェクト
-                            createHitEffect(bullet.position);
-                        }
+                    // 弾丸とゾンビの距離を計算
+                    const distance = bullet.position.distanceTo(zombie.position);
+                    if (distance < 0.8) { // ゾンビのサイズに合わせて調整
+                        // ゾンビにダメージ
+                        const killed = zombie.takeDamage(50);
                         
                         // 弾丸を削除
-                        scene.remove(bullet);
-                        scene.remove(trail);
+                        bullet.remove();
                         bullets.splice(i, 1);
+                        
+                        // ゾンビが死亡したら配列から削除
+                        if (killed) {
+                            zombies.splice(j, 1);
+                        }
+                        
                         break;
                     }
                 }
-            }
-        }
-        
-        // エフェクトの更新
-        function updateEffects(delta) {
-            for (let i = effects.length - 1; i >= 0; i--) {
-                const effect = effects[i];
-                
-                // パーティクルの移動
-                const positions = effect.geometry.attributes.position.array;
-                const velocities = effect.userData.velocities;
-                
-                for (let j = 0; j < positions.length; j += 3) {
-                    positions[j] += velocities[j / 3].x;
-                    positions[j + 1] += velocities[j / 3].y;
-                    positions[j + 2] += velocities[j / 3].z;
-                    
-                    // 重力の影響
-                    velocities[j / 3].y -= 0.01;
-                }
-                
-                effect.geometry.attributes.position.needsUpdate = true;
-                
-                // 透明度の更新
-                effect.userData.elapsedTime += delta;
-                const lifeRatio = effect.userData.elapsedTime / effect.userData.lifeTime;
-                effect.material.opacity = 1 - lifeRatio;
-                
-                // 寿命が尽きたらエフェクトを削除
-                if (effect.userData.elapsedTime > effect.userData.lifeTime) {
-                    scene.remove(effect);
-                    effects.splice(i, 1);
-                }
-            }
-        }
-        
-        // 初期化の実行
-        init();
-    </script>
-</body>
-</html>

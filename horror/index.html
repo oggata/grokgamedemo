@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ホラーゲーム</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000000;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #door-transition {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000000;
+            display: none;
+            z-index: 50;
+            color: #ffffff;
+            font-size: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        #door-animation {
+            width: 80%;
+            height: 60%;
+            background-color: #333;
+            position: relative;
+            overflow: hidden;
+            display: none;
+        }
+        .door-left, .door-right {
+            position: absolute;
+            width: 50%;
+            height: 100%;
+            background-color: #555;
+            border: 2px solid #777;
+            transition: transform 2s;
+        }
+        .door-left {
+            left: 0;
+            transform-origin: left center;
+        }
+        .door-right {
+            right: 0;
+            transform-origin: right center;
+        }
+        #health-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 200px;
+            height: 20px;
+            background-color: #333;
+            border: 2px solid #666;
+            z-index: 10;
+        }
+        #health-fill {
+            width: 100%;
+            height: 100%;
+            background-color: #00cc00;
+        }
+        #ammo-counter {
+            position: absolute;
+            bottom: 50px;
+            left: 20px;
+            color: white;
+            font-size: 18px;
+            z-index: 10;
+        }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 16px;
+            z-index: 10;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-screen">
+        <h1>ホラーゲーム</h1>
+        <p>読み込み中...</p>
+    </div>
+    
+    <div id="door-transition">
+        <div id="door-animation">
+            <div class="door-left"></div>
+            <div class="door-right"></div>
+        </div>
+        <p id="door-text">ドアを開いています...</p>
+    </div>
+
+    <div id="health-bar">
+        <div id="health-fill"></div>
+    </div>
+    <div id="ammo-counter">弾数: 30 / 30</div>
+    <div id="instructions">
+        移動: WASD<br>
+        射撃: Shift<br>
+        リロード: R<br>
+        ドアを開く: E (ドアの前で)
+    </div>
+
+    <!-- Three.jsライブラリ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- ゲームのロジック -->
+    <script src="./characters.js"></script>
+    <script src="./enemies.js"></script>
+    <script src="./main.js"></script>
+</body>
+</html>
