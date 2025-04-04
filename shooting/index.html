@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Star Fox-like 3D Shooter with AR</title>
+    <title>3D Shooter</title>
     <style>
         body { margin: 0; overflow: hidden; }
         #score { 
@@ -13,29 +13,10 @@
             font-family: Arial; 
             font-size: 24px; 
         }
-        #ar-button { 
-            position: absolute; 
-            bottom: 20px; 
-            left: 50%; 
-            transform: translateX(-50%);
-            padding: 10px 20px; 
-            font-size: 16px; 
-        }
-        model-viewer {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            display: none;
-        }
     </style>
 </head>
 <body>
     <div id="score">Score: 0</div>
-    <button id="ar-button">View in AR</button>
-    <model-viewer id="ar-viewer" src="player.glb" ar ar-modes="webxr scene-viewer quick-look" camera-controls auto-rotate></model-viewer>
-    
     <script type="importmap">
         {
             "imports": {
@@ -46,7 +27,6 @@
     </script>
     <script type="module">
         import * as THREE from 'three';
-        import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 
         // シーンの設定
         const scene = new THREE.Scene();
@@ -120,28 +100,6 @@
             }
         }
 
-        // 自機をglTFとしてエクスポート
-        function exportPlayerToGLTF() {
-            const exporter = new GLTFExporter();
-            exporter.parse(player, (gltf) => {
-                const blob = new Blob([JSON.stringify(gltf)], { type: 'application/octet-stream' });
-                const url = URL.createObjectURL(blob);
-                const modelViewer = document.getElementById('ar-viewer');
-                modelViewer.src = url;
-            }, {});
-        }
-
-        // ARボタンの設定
-        const arButton = document.getElementById('ar-button');
-        const modelViewer = document.getElementById('ar-viewer');
-        arButton.addEventListener('click', () => {
-            exportPlayerToGLTF();
-            renderer.domElement.style.display = 'none';
-            modelViewer.style.display = 'block';
-            scoreElement.style.display = 'none';
-            arButton.style.display = 'none';
-        });
-
         // アニメーションループ
         function animate() {
             requestAnimationFrame(animate);
@@ -193,12 +151,6 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
-        // スクリプトの読み込み
-        const modelViewerScript = document.createElement('script');
-        modelViewerScript.type = 'module';
-        modelViewerScript.src = 'https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js';
-        document.head.appendChild(modelViewerScript);
 
         animate();
     </script>

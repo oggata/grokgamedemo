@@ -1,46 +1,177 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Populous-like Game</title>
+    <title>Enhanced Populous-like Game</title>
     <style>
-        body { margin: 0; overflow: hidden; }
-        canvas { display: block; }
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            user-select: none;
+        }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            user-select: none;
+        }
     </style>
 </head>
 <body>
+    <div id="ui">
+        <div>人口: <span id="population">0</span></div>
+        <div>建物: <span id="building-count">0</span></div>
+        <div>マナ: <span id="mana">100</span></div>
+    </div>
+    <div id="controls">
+        <div>左クリック: 地形を上げる (マナ -5)</div>
+        <div>Shift+左クリック: 地形を下げる (マナ -5)</div>
+        <div>B キー: 建物を建てる (マナ -20)</div>
+        <div>H キー: 災害発動 (マナ -50)</div>
+        <div>WASD: カメラ移動</div>
+        <div>Q/E: カメラ回転</div>
+        <div>マウスホイール: ズーム</div>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script>
         // シーンの設定
         const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // 空色の背景
+        
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
         // ライト
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(0, 1, 1).normalize();
-        scene.add(light);
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(50, 100, 50);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.near = 0.5;
+        directionalLight.shadow.camera.far = 500;
+        directionalLight.shadow.camera.left = -100;
+        directionalLight.shadow.camera.right = 100;
+        directionalLight.shadow.camera.top = 100;
+        directionalLight.shadow.camera.bottom = -100;
+        scene.add(directionalLight);
 
+        // フォグ効果
+        scene.fog = new THREE.Fog(0x87CEEB, 60, 200);
+
+        // ゲーム変数
+        let mana = 100;
+        let isPlacingBuilding = false;
+        
         // 地面の作成（起伏を追加）
-        const geometry = new THREE.PlaneGeometry(100, 100, 32, 32);
-        const material = new THREE.MeshPhongMaterial({ color: 0x00ff00, wireframe: false });
+        const size = 100;
+        const segments = 64; // より高精細な地形
+        const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+        
+        // テクスチャローダー
+        const textureLoader = new THREE.TextureLoader();
+        
+        // 地形の高さによって色を変える
+        const vertexShader = `
+            varying vec3 vPosition;
+            void main() {
+                vPosition = position;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+        
+        const fragmentShader = `
+            varying vec3 vPosition;
+            void main() {
+                float height = vPosition.z;
+                vec3 waterColor = vec3(0.0, 0.3, 0.7);
+                vec3 sandColor = vec3(0.76, 0.7, 0.5);
+                vec3 grassColor = vec3(0.0, 0.5, 0.0);
+                vec3 rockColor = vec3(0.5, 0.5, 0.5);
+                vec3 snowColor = vec3(1.0, 1.0, 1.0);
+                
+                vec3 color;
+                if (height < 0.5) {
+                    color = waterColor;
+                } else if (height < 1.0) {
+                    float t = (height - 0.5) / 0.5;
+                    color = mix(waterColor, sandColor, t);
+                } else if (height < 4.0) {
+                    float t = (height - 1.0) / 3.0;
+                    color = mix(sandColor, grassColor, t);
+                } else if (height < 8.0) {
+                    float t = (height - 4.0) / 4.0;
+                    color = mix(grassColor, rockColor, t);
+                } else {
+                    float t = min((height - 8.0) / 4.0, 1.0);
+                    color = mix(rockColor, snowColor, t);
+                }
+                
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+        
+        const material = new THREE.ShaderMaterial({
+            uniforms: {},
+            vertexShader: vertexShader,
+            fragmentShader: fragmentShader,
+            side: THREE.DoubleSide
+        });
+        
         const plane = new THREE.Mesh(geometry, material);
         plane.rotation.x = -Math.PI / 2;
-
+        plane.receiveShadow = true;
+        
         // 初期起伏の追加
         const vertices = plane.geometry.attributes.position.array;
         for (let i = 0; i < vertices.length; i += 3) {
             const x = vertices[i];
             const y = vertices[i + 1];
-            // シンプルなノイズを使って高さを設定
-            const height = Math.sin(x * 0.1) * Math.cos(y * 0.1) * 5 + 
-                         Math.sin(x * 0.3) * Math.cos(y * 0.3) * 2;
+            // よりリアルな地形ノイズ
+            const height = 
+                  Math.sin(x * 0.1) * Math.cos(y * 0.1) * 3 + 
+                  Math.sin(x * 0.3 + 0.5) * Math.cos(y * 0.3 + 0.5) * 2 +
+                  Math.sin(x * 0.03) * Math.cos(y * 0.03) * 5;
+            
             vertices[i + 2] = Math.max(0, height); // 高さは0以上
         }
         plane.geometry.attributes.position.needsUpdate = true;
         plane.geometry.computeVertexNormals();
         scene.add(plane);
+
+        // 水面
+        const waterGeometry = new THREE.PlaneGeometry(size * 2, size * 2);
+        const waterMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x0077be,
+            transparent: true,
+            opacity: 0.7,
+            specular: 0xffffff
+        });
+        const water = new THREE.Mesh(waterGeometry, waterMaterial);
+        water.rotation.x = -Math.PI / 2;
+        water.position.y = 0.4; // 水面の高さ
+        scene.add(water);
 
         // レイキャスター
         const raycaster = new THREE.Raycaster();
@@ -49,22 +180,124 @@
         // 建物と人を管理する配列
         const buildings = [];
         const people = [];
+        
+        // 建物の種類
+        const buildingTypes = [
+            { name: "House", color: 0x8B4513, width: 2, height: 2, depth: 2, peopleCapacity: 5 },
+            { name: "Farm", color: 0xA0522D, width: 3, height: 1, depth: 3, peopleCapacity: 3 },
+            { name: "Temple", color: 0xDAA520, width: 4, height: 4, depth: 4, peopleCapacity: 10 }
+        ];
 
-        // カメラ位置
-        camera.position.set(0, 50, 50);
+        // 仮想建物（置く前に表示）
+        let ghostBuilding = null;
+        let currentBuildingType = 0;
+
+        // カメラ位置と制御
+        camera.position.set(0, 30, 50);
         camera.lookAt(0, 0, 0);
+        
+        // カメラコントロール変数
+        const cameraControls = {
+            moveSpeed: 0.5,
+            rotateSpeed: 0.01,
+            moveForward: false,
+            moveBackward: false,
+            moveLeft: false,
+            moveRight: false,
+            rotateLeft: false,
+            rotateRight: false
+        };
 
         // イベントリスナー
         let isShiftPressed = false;
+        
         document.addEventListener('keydown', (event) => {
-            if (event.key === 'Shift') isShiftPressed = true;
-            if (event.key === 'h' || event.key === 'H') triggerArmageddon();
+            switch(event.key) {
+                case 'Shift': 
+                    isShiftPressed = true; 
+                    break;
+                case 'h': 
+                case 'H': 
+                    if (mana >= 50) {
+                        triggerArmageddon();
+                        updateMana(-50);
+                    }
+                    break;
+                case 'b':
+                case 'B':
+                    toggleBuildingPlacement();
+                    break;
+                case 'w': 
+                case 'W': 
+                    cameraControls.moveForward = true; 
+                    break;
+                case 's': 
+                case 'S': 
+                    cameraControls.moveBackward = true; 
+                    break;
+                case 'a': 
+                case 'A': 
+                    cameraControls.moveLeft = true; 
+                    break;
+                case 'd':
+
+                case 'D': 
+                    cameraControls.moveRight = true; 
+                    break;
+                case 'q': 
+                case 'Q': 
+                    cameraControls.rotateLeft = true; 
+                    break;
+                case 'e': 
+                case 'E': 
+                    cameraControls.rotateRight = true; 
+                    break;
+                case '1':
+                case '2':
+                case '3':
+                    currentBuildingType = parseInt(event.key) - 1;
+                    if (isPlacingBuilding) {
+                        updateGhostBuilding();
+                    }
+                    break;
+            }
         });
+        
         document.addEventListener('keyup', (event) => {
-            if (event.key === 'Shift') isShiftPressed = false;
+            switch(event.key) {
+                case 'Shift': 
+                    isShiftPressed = false; 
+                    break;
+                case 'w': 
+                case 'W': 
+                    cameraControls.moveForward = false; 
+                    break;
+                case 's': 
+                case 'S': 
+                    cameraControls.moveBackward = false; 
+                    break;
+                case 'a': 
+                case 'A': 
+                    cameraControls.moveLeft = false; 
+                    break;
+                case 'd': 
+                case 'D': 
+                    cameraControls.moveRight = false; 
+                    break;
+                case 'q': 
+                case 'Q': 
+                    cameraControls.rotateLeft = false; 
+                    break;
+                case 'e': 
+                case 'E': 
+                    cameraControls.rotateRight = false; 
+                    break;
+            }
         });
 
         renderer.domElement.addEventListener('click', onClick);
+        renderer.domElement.addEventListener('mousemove', onMouseMove);
+        renderer.domElement.addEventListener('wheel', onMouseWheel);
 
         function onClick(event) {
             event.preventDefault();
@@ -76,13 +309,114 @@
 
             if (intersects.length > 0) {
                 const point = intersects[0].point;
-                modifyTerrain(point);
+                
+                if (isPlacingBuilding) {
+                    if (mana >= 20 && canPlaceBuilding(point)) {
+                        createBuilding(point.x, point.z, buildingTypes[currentBuildingType]);
+                        updateMana(-20);
+                    }
+                } else {
+                    if (mana >= 5) {
+                        modifyTerrain(point);
+                        updateMana(-5);
+                    }
+                }
             }
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            if (isPlacingBuilding && ghostBuilding) {
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObject(plane);
+
+                if (intersects.length > 0) {
+                    const point = intersects[0].point;
+                    ghostBuilding.position.set(point.x, point.y + buildingTypes[currentBuildingType].height / 2, point.z);
+                    
+                    // 設置可能かどうかで色を変える
+                    if (canPlaceBuilding(point)) {
+                        ghostBuilding.material.color.set(0x00ff00); // 緑色 = 設置可能
+                    } else {
+                        ghostBuilding.material.color.set(0xff0000); // 赤色 = 設置不可
+                    }
+                }
+            }
+        }
+
+        function onMouseWheel(event) {
+            const zoomSpeed = 0.1;
+            const maxZoom = 80;
+            const minZoom = 10;
+            
+            // カメラと原点の距離を計算
+            const distance = camera.position.distanceTo(new THREE.Vector3(0, 0, 0));
+            
+            // ズームイン・アウト
+            if (event.deltaY > 0 && distance < maxZoom) {
+                // ズームアウト
+                camera.position.multiplyScalar(1 + zoomSpeed);
+            } else if (event.deltaY < 0 && distance > minZoom) {
+                // ズームイン
+                camera.position.multiplyScalar(1 - zoomSpeed);
+            }
+        }
+
+        function toggleBuildingPlacement() {
+            isPlacingBuilding = !isPlacingBuilding;
+            
+            if (isPlacingBuilding) {
+                updateGhostBuilding();
+            } else if (ghostBuilding) {
+                scene.remove(ghostBuilding);
+                ghostBuilding = null;
+            }
+        }
+
+        function updateGhostBuilding() {
+            if (ghostBuilding) {
+                scene.remove(ghostBuilding);
+            }
+            
+            const type = buildingTypes[currentBuildingType];
+            const ghostGeo = new THREE.BoxGeometry(type.width, type.height, type.depth);
+            const ghostMat = new THREE.MeshBasicMaterial({
+                color: 0x00ff00,
+                transparent: true,
+                opacity: 0.5
+            });
+            
+            ghostBuilding = new THREE.Mesh(ghostGeo, ghostMat);
+            ghostBuilding.position.set(0, type.height / 2, 0);
+            scene.add(ghostBuilding);
+        }
+
+        function canPlaceBuilding(point) {
+            // 水面の上にあるか
+            if (getHeightAt(point.x, point.z) < 0.5) {
+                return false;
+            }
+            
+            // 他の建物と重ならないか
+            const type = buildingTypes[currentBuildingType];
+            const buildingSize = Math.max(type.width, type.depth) / 2;
+            
+            for (const building of buildings) {
+                if (point.distanceTo(building.position) < buildingSize + 2) {
+                    return false;
+                }
+            }
+            
+            return true;
         }
 
         function modifyTerrain(point) {
             const vertices = plane.geometry.attributes.position.array;
             let modified = false;
+            const radius = 5; // 修正半径
+            const strength = 0.5; // 修正強度
 
             for (let i = 0; i < vertices.length; i += 3) {
                 const x = vertices[i];
@@ -90,12 +424,12 @@
                 const z = vertices[i + 2];
                 const distance = Math.sqrt((x - point.x) ** 2 + (y - point.z) ** 2);
 
-                if (distance < 5) {
-                    if (isShiftPressed) {
-                        vertices[i + 2] = Math.max(z - 0.5, 0);
-                    } else {
-                        vertices[i + 2] = z + 0.5;
-                    }
+                if (distance < radius) {
+                    // クレーターの形状（中心が深く、端がなだらか）
+                    const factor = 1 - Math.pow(distance / radius, 2);
+                    const depth = 2 * factor; // クレーターの最大深さ
+                    
+                    vertices[i + 2] = Math.max(vertices[i + 2] - depth, 0);
                     modified = true;
                 }
             }
@@ -103,82 +437,164 @@
             if (modified) {
                 plane.geometry.attributes.position.needsUpdate = true;
                 plane.geometry.computeVertexNormals();
-                checkFlatAreas();
             }
         }
 
-        function checkFlatAreas() {
-            const vertices = plane.geometry.attributes.position.array;
-            const gridSize = 32;
-            const cellSize = 100 / gridSize;
+        function updateMana(amount) {
+            mana += amount;
+            // マナは最大200、最小0
+            mana = Math.max(0, Math.min(200, mana));
+            document.getElementById('mana').textContent = mana;
+        }
 
-            for (let i = 0; i < gridSize; i++) {
-                for (let j = 0; j < gridSize; j++) {
-                    const index = (i + j * (gridSize + 1)) * 3;
-                    const height = vertices[index + 2];
-                    
-                    if (Math.abs(height) < 0.1 && Math.random() < 0.05) {
-                        const x = i * cellSize - 50;
-                        const z = j * cellSize - 50;
-                        if (!buildings.some(b => b.position.distanceTo(new THREE.Vector3(x, 0, z)) < 5)) {
-                            createBuilding(x, z);
-                        }
-                    }
-                }
+        function updateUI() {
+            document.getElementById('population').textContent = people.length;
+            document.getElementById('building-count').textContent = buildings.length;
+            
+            // マナの自然回復
+            if (people.length > 0) {
+                updateMana(people.length * 0.01);
             }
         }
 
-        function createBuilding(x, z) {
-            const buildingGeo = new THREE.BoxGeometry(2, 2, 2);
-            const buildingMat = new THREE.MeshPhongMaterial({ color: 0x808080 });
-            const building = new THREE.Mesh(buildingGeo, buildingMat);
-            building.position.set(x, 1, z);
-            scene.add(building);
-            buildings.push(building);
-
-            // 人を生成
-            setInterval(() => {
-                if (buildings.includes(building)) {
-                    createPerson(x, z);
+        // カメラコントロール
+        function updateCamera() {
+            // カメラの現在の向き
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            
+            // 前後移動
+            if (cameraControls.moveForward) {
+                camera.position.add(direction.multiplyScalar(cameraControls.moveSpeed));
+            }
+            if (cameraControls.moveBackward) {
+                camera.getWorldDirection(direction);
+                camera.position.sub(direction.multiplyScalar(cameraControls.moveSpeed));
+            }
+            
+            // 左右移動
+            if (cameraControls.moveLeft || cameraControls.moveRight) {
+                camera.getWorldDirection(direction);
+                const sideways = new THREE.Vector3().crossVectors(direction, camera.up);
+                sideways.normalize();
+                
+                if (cameraControls.moveLeft) {
+                    camera.position.sub(sideways.multiplyScalar(cameraControls.moveSpeed));
                 }
-            }, 3000);
+                if (cameraControls.moveRight) {
+                    camera.getWorldDirection(direction);
+                    const sideways = new THREE.Vector3().crossVectors(direction, camera.up);
+                    sideways.normalize();
+                    camera.position.add(sideways.multiplyScalar(cameraControls.moveSpeed));
+                }
+            }
+            
+            // 回転
+            if (cameraControls.rotateLeft || cameraControls.rotateRight) {
+                const rotationPoint = new THREE.Vector3(0, 0, 0);
+                const angle = cameraControls.rotateLeft ? cameraControls.rotateSpeed : -cameraControls.rotateSpeed;
+                
+                // カメラ位置を中心点を軸に回転
+                const currentPosition = camera.position.clone();
+                
+                // Y軸回りの回転
+                const cosTheta = Math.cos(angle);
+                const sinTheta = Math.sin(angle);
+                
+                const x = currentPosition.x - rotationPoint.x;
+                const z = currentPosition.z - rotationPoint.z;
+                
+                camera.position.x = cosTheta * x - sinTheta * z + rotationPoint.x;
+                camera.position.z = sinTheta * x + cosTheta * z + rotationPoint.z;
+                
+                // 中心点を見続ける
+                camera.lookAt(rotationPoint);
+            }
         }
 
-        function createPerson(x, z) {
-            const personGeo = new THREE.SphereGeometry(0.5, 16, 16);
-            const personMat = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-            const person = new THREE.Mesh(personGeo, personMat);
-            person.position.set(x, 0.5, z);
-            scene.add(person);
-            people.push(person);
-
-            // 人の動き
-            person.direction = new THREE.Vector3(
-                Math.random() - 0.5,
-                0,
-                Math.random() - 0.5
-            ).normalize();
+        // 空に雲を追加
+        function addClouds() {
+            for (let i = 0; i < 20; i++) {
+                const cloudGeometry = new THREE.SphereGeometry(5, 16, 16);
+                const cloudMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                
+                const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial);
+                // ランダムな位置に配置
+                cloud.position.set(
+                    Math.random() * 200 - 100,
+                    30 + Math.random() * 20,
+                    Math.random() * 200 - 100
+                );
+                // ランダムなサイズ
+                const scale = 0.5 + Math.random() * 1.5;
+                cloud.scale.set(scale, scale * 0.6, scale);
+                
+                // 雲の動き
+                cloud.userData = {
+                    speed: 0.02 + Math.random() * 0.05,
+                    direction: new THREE.Vector3(
+                        Math.random() * 0.2 - 0.1,
+                        0,
+                        Math.random() * 0.2 - 0.1
+                    ).normalize()
+                };
+                
+                scene.add(cloud);
+                clouds.push(cloud);
+            }
         }
 
-        function triggerArmageddon() {
-            people.forEach(person => {
-                scene.remove(person);
-            });
-            people.length = 0;
-        }
+        // 雲の配列
+        const clouds = [];
+        addClouds();
 
+        // 時間管理
+        let clock = new THREE.Clock();
+        let lastTime = 0;
+        let gameTime = 0;
+        
+        // メインループ
         function animate() {
             requestAnimationFrame(animate);
-
-            // 人の移動
-            people.forEach((person, index) => {
-                person.position.add(person.direction.clone().multiplyScalar(0.1));
-                if (person.position.distanceTo(new THREE.Vector3(0, 0, 0)) > 50) {
-                    scene.remove(person);
-                    people.splice(index, 1);
-                }
+            
+            // 経過時間の計算
+            const currentTime = clock.getElapsedTime();
+            const delta = currentTime - lastTime;
+            lastTime = currentTime;
+            
+            gameTime += delta;
+            
+            // カメラ更新
+            updateCamera();
+            
+            // 雲の移動
+            clouds.forEach(cloud => {
+                cloud.position.add(cloud.userData.direction.clone().multiplyScalar(cloud.userData.speed));
+                
+                // 雲が範囲外に出たら反対側に戻す
+                if (cloud.position.x > 100) cloud.position.x = -100;
+                if (cloud.position.x < -100) cloud.position.x = 100;
+                if (cloud.position.z > 100) cloud.position.z = -100;
+                if (cloud.position.z < -100) cloud.position.z = 100;
             });
-
+            
+            // 人の行動更新
+            people.forEach(person => {
+                updatePersonBehavior(person, delta);
+            });
+            
+            // 毎秒UI更新
+            if (Math.floor(gameTime) > Math.floor(gameTime - delta)) {
+                updateUI();
+            }
+            
+            // 水面のアニメーション
+            water.position.y = 0.4 + Math.sin(gameTime * 0.5) * 0.05;
+            
             renderer.render(scene, camera);
         }
 
@@ -193,3 +609,344 @@
     </script>
 </body>
 </html>
+                    // 距離に応じた強度
+                    const factor = 1 - distance / radius;
+                    
+                    if (isShiftPressed) {
+                        vertices[i + 2] = Math.max(z - strength * factor, 0);
+                    } else {
+                        vertices[i + 2] = z + strength * factor;
+                    }
+                    modified = true;
+                }
+            }
+
+            if (modified) {
+                plane.geometry.attributes.position.needsUpdate = true;
+                plane.geometry.computeVertexNormals();
+                checkFlatAreas();
+            }
+        }
+
+        function getHeightAt(x, z) {
+            // レイキャストで高さを取得
+            const ray = new THREE.Raycaster(
+                new THREE.Vector3(x, 50, z),
+                new THREE.Vector3(0, -1, 0)
+            );
+            const intersects = ray.intersectObject(plane);
+            if (intersects.length > 0) {
+                return intersects[0].point.y;
+            }
+            return 0;
+        }
+
+        function checkFlatAreas() {
+            // バックグラウンドで平地をチェック
+            setTimeout(() => {
+                if (Math.random() < 0.1 && buildings.length < 30) { // 自然発生確率
+                    const x = Math.random() * 80 - 40;
+                    const z = Math.random() * 80 - 40;
+                    const height = getHeightAt(x, z);
+                    
+                    if (height > 0.5 && canPlaceBuilding({x, y: height, z})) {
+                        // ランダムな種類の建物を選択
+                        const type = buildingTypes[Math.floor(Math.random() * buildingTypes.length)];
+                        createBuilding(x, z, type);
+                    }
+                }
+            }, 1000);
+        }
+
+        function createBuilding(x, z, type) {
+            const height = getHeightAt(x, z);
+            
+            // 建物のジオメトリとマテリアル
+            const buildingGeo = new THREE.BoxGeometry(type.width, type.height, type.depth);
+            const buildingMat = new THREE.MeshPhongMaterial({ color: type.color });
+            const building = new THREE.Mesh(buildingGeo, buildingMat);
+            
+            building.position.set(x, height + type.height / 2, z);
+            building.castShadow = true;
+            building.receiveShadow = true;
+            building.userData = { type: type, residents: 0 };
+            
+            scene.add(building);
+            buildings.push(building);
+            updateUI();
+
+            // 人を生成（時間差で）
+            let peopleToCreate = type.peopleCapacity;
+            
+            const createNextPerson = () => {
+                if (peopleToCreate > 0 && buildings.includes(building)) {
+                    createPerson(x, z, building);
+                    peopleToCreate--;
+                    
+                    if (peopleToCreate > 0) {
+                        setTimeout(createNextPerson, 1000 + Math.random() * 2000);
+                    }
+                }
+            };
+            
+            setTimeout(createNextPerson, 2000);
+        }
+
+        function createPerson(x, z, homeBuilding) {
+            const personGeo = new THREE.SphereGeometry(0.3, 8, 8);
+            
+            // ランダムな人の色
+            const colors = [0xff0000, 0xff6600, 0xffff00, 0x00ff00, 0x0000ff, 0xff00ff];
+            const personMat = new THREE.MeshPhongMaterial({ 
+                color: colors[Math.floor(Math.random() * colors.length)]
+            });
+            
+            const person = new THREE.Mesh(personGeo, personMat);
+            const height = getHeightAt(x, z);
+            person.position.set(x, height + 0.3, z);
+            person.castShadow = true;
+            
+            scene.add(person);
+            people.push(person);
+            homeBuilding.userData.residents++;
+            updateUI();
+
+            // 人のAI
+            person.userData = {
+                home: homeBuilding,
+                state: 'idle',
+                targetPosition: null,
+                speed: 0.05 + Math.random() * 0.05,
+                idleTime: 0,
+                maxIdleTime: 100 + Math.random() * 200
+            };
+        }
+
+        function updatePersonBehavior(person, delta) {
+            const userData = person.userData;
+            
+            // 家が消滅している場合、人も消滅
+            if (!buildings.includes(userData.home)) {
+                scene.remove(person);
+                const index = people.indexOf(person);
+                if (index > -1) {
+                    people.splice(index, 1);
+                }
+                updateUI();
+                return;
+            }
+            
+            switch (userData.state) {
+                case 'idle':
+                    userData.idleTime += delta;
+                    if (userData.idleTime > userData.maxIdleTime) {
+                        // 新しい目的地を決める
+                        userData.state = 'moving';
+                        userData.idleTime = 0;
+                        
+                        // ランダムな目的地か別の建物へ
+                        if (Math.random() < 0.7 || buildings.length <= 1) {
+                            // ランダムな場所へ移動
+                            const angle = Math.random() * Math.PI * 2;
+                            const distance = 5 + Math.random() * 10;
+                            const targetX = userData.home.position.x + Math.cos(angle) * distance;
+                            const targetZ = userData.home.position.z + Math.sin(angle) * distance;
+                            
+                            // マップ内に収める
+                            userData.targetPosition = new THREE.Vector3(
+                                Math.max(-45, Math.min(45, targetX)),
+                                0,
+                                Math.max(-45, Math.min(45, targetZ))
+                            );
+                        } else {
+                            // 別の建物へ
+                            let targetBuilding;
+                            do {
+                                targetBuilding = buildings[Math.floor(Math.random() * buildings.length)];
+                            } while (targetBuilding === userData.home);
+                            
+                            userData.targetPosition = new THREE.Vector3(
+                                targetBuilding.position.x,
+                                0,
+                                targetBuilding.position.z
+                            );
+                        }
+                    }
+                    break;
+                    
+                case 'moving':
+                    // 目的地へ移動
+                    const currentX = person.position.x;
+                    const currentZ = person.position.z;
+                    
+                    // 目的地への方向ベクトル
+                    const targetX = userData.targetPosition.x;
+                    const targetZ = userData.targetPosition.z;
+                    
+                    const dx = targetX - currentX;
+                    const dz = targetZ - currentZ;
+                    const distance = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (distance < 0.5) {
+                        // 目的地に到着
+                        userData.state = 'idle';
+                        userData.idleTime = 0;
+                        userData.maxIdleTime = 50 + Math.random() * 100;
+                    } else {
+                        // 目的地へ移動
+                        const dirX = dx / distance;
+                        const dirZ = dz / distance;
+                        
+                        const newX = currentX + dirX * userData.speed;
+                        const newZ = currentZ + dirZ * userData.speed;
+                        const height = getHeightAt(newX, newZ);
+                        
+                        // 高さチェック（急な崖は登れない）
+                        const currentHeight = person.position.y - 0.3; // 球の半径を引く
+                        if (Math.abs(height - currentHeight) < 1.0) {
+                            person.position.set(newX, height + 0.3, newZ);
+                        } else {
+                            // 方向転換
+                            userData.state = 'idle';
+                            userData.idleTime = userData.maxIdleTime;
+                        }
+                    }
+                    break;
+            }
+        }
+
+        function triggerArmageddon() {
+            const meteorCount = 10;
+            const delay = 200;
+            
+            for (let i = 0; i < meteorCount; i++) {
+                setTimeout(() => {
+                    const x = Math.random() * 80 - 40;
+                    const z = Math.random() * 80 - 40;
+                    createMeteor(x, z);
+                }, i * delay);
+            }
+        }
+
+        function createMeteor(x, z) {
+            // 隕石の作成
+            const meteorGeo = new THREE.SphereGeometry(1, 16, 16);
+            const meteorMat = new THREE.MeshPhongMaterial({ 
+                color: 0xff3300,
+                emissive: 0xff0000
+            });
+            
+            const meteor = new THREE.Mesh(meteorGeo, meteorMat);
+            meteor.position.set(x, 50, z);
+            scene.add(meteor);
+            
+            // 炎エフェクト
+            const fireGeo = new THREE.SphereGeometry(1.5, 16, 16);
+            const fireMat = new THREE.MeshPhongMaterial({ 
+                color: 0xff5500,
+                transparent: true,
+                opacity: 0.7
+            });
+            
+            const fire = new THREE.Mesh(fireGeo, fireMat);
+            meteor.add(fire);
+            
+            // アニメーション
+            const speed = 0.8;
+            let impacted = false;
+            
+            const animateMeteor = () => {
+                if (impacted) return;
+                
+                meteor.position.y -= speed;
+                
+                if (meteor.position.y <= getHeightAt(meteor.position.x, meteor.position.z) + 1) {
+                    impacted = true;
+                    meteorImpact(meteor.position.x, meteor.position.z);
+                    
+                    // 消滅させる
+                    setTimeout(() => {
+                        scene.remove(meteor);
+                    }, 1000);
+                } else {
+                    requestAnimationFrame(animateMeteor);
+                }
+            };
+            
+            animateMeteor();
+        }
+
+        function meteorImpact(x, z) {
+            // 爆発エフェクト
+            const explosionGeo = new THREE.SphereGeometry(0.5, 32, 32);
+            const explosionMat = new THREE.MeshPhongMaterial({ 
+                color: 0xff0000,
+                emissive: 0xff5500,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const explosion = new THREE.Mesh(explosionGeo, explosionMat);
+            explosion.position.set(x, getHeightAt(x, z) + 0.5, z);
+            scene.add(explosion);
+            
+            // 爆発を拡大
+            let size = 0.5;
+            const maxSize = 10;
+            const expandSpeed = 0.5;
+            
+            const expandExplosion = () => {
+                size += expandSpeed;
+                explosion.scale.set(size, size, size);
+                
+                // 爆発範囲内の建物と人を破壊
+                const explosionRadius = size;
+                
+                // 建物チェック
+                for (let i = buildings.length - 1; i >= 0; i--) {
+                    const building = buildings[i];
+                    const distance = new THREE.Vector2(building.position.x - x, building.position.z - z).length();
+                    
+                    if (distance < explosionRadius) {
+                        scene.remove(building);
+                        buildings.splice(i, 1);
+                    }
+                }
+                
+                // 地形を削る
+                modifyTerrainCrater(x, z, explosionRadius * 0.8);
+                
+                if (size < maxSize) {
+                    requestAnimationFrame(expandExplosion);
+                } else {
+                    // フェードアウト
+                    let opacity = 0.8;
+                    const fadeOut = () => {
+                        opacity -= 0.02;
+                        explosionMat.opacity = opacity;
+                        
+                        if (opacity <= 0) {
+                            scene.remove(explosion);
+                        } else {
+                            requestAnimationFrame(fadeOut);
+                        }
+                    };
+                    
+                    fadeOut();
+                }
+            };
+            
+            expandExplosion();
+            updateUI();
+        }
+
+        function modifyTerrainCrater(centerX, centerZ, radius) {
+            const vertices = plane.geometry.attributes.position.array;
+            let modified = false;
+
+            for (let i = 0; i < vertices.length; i += 3) {
+                const x = vertices[i];
+                const y = vertices[i + 1];
+                const distance = Math.sqrt((x - centerX) ** 2 + (y - centerZ) ** 2);
+
+                if (distance < radius) {
