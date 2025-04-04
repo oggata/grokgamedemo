@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3Dファイティングゲーム</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            background-color: rgba(0,0,0,0.5);
+            padding: 5px;
+        }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            background-color: rgba(0,0,0,0.5);
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">3Dファイティングゲーム</div>
+    <div id="healthBars" style="position: absolute; top: 40px; width: 100%; display: flex; justify-content: center; gap: 20px;">
+        <div style="text-align: center; color: white;">
+            <div>プレイヤー</div>
+            <div style="width: 200px; height: 20px; background-color: #333; border: 2px solid white;">
+                <div id="playerHealth" style="width: 100%; height: 100%; background-color: #0066cc;"></div>
+            </div>
+        </div>
+        <div style="text-align: center; color: white;">
+            <div>敵</div>
+            <div style="width: 200px; height: 20px; background-color: #333; border: 2px solid white;">
+                <div id="enemyHealth" style="width: 100%; height: 100%; background-color: #cc0000;"></div>
+            </div>
+        </div>
+    </div>
+    <div id="result" style="position: absolute; top: 100px; width: 100%; text-align: center; color: white; font-size: 36px; font-weight: bold; display: none;"></div>
+    <div id="controls" style="position: absolute; bottom: 10px; width: 100%; text-align: center; color: white; background-color: rgba(0,0,0,0.5); padding: 5px;">
+        操作方法: A/D - 移動, W - ジャンプ, J - パンチ, K - キック<br>
+        ※ステージから落ちると敗北！相手をステージ外に押し出そう！
+    </div>
+    <div id="restart" style="position: absolute; bottom: 60px; width: 100%; text-align: center; display: none;">
+        <button style="padding: 10px 20px; font-size: 16px; cursor: pointer;">リスタート</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ゲームの状態
+        const gameState = {
+            player: null,
+            enemy: null,
+            keys: {},
+            actions: {
+                punch: false,
+                kick: false,
+                cooldown: 0
+            },
+            health: {
+                player: 100,
+                enemy: 100
+            },
+            gameOver: false,
+            updateHealthUI: function() {
+                document.getElementById('playerHealth').style.width = this.health.player + '%';
+                document.getElementById('enemyHealth').style.width = this.health.enemy + '%';
+            },
+            showResult: function(winner) {
+                document.getElementById('result').style.display = 'block';
+                document.getElementById('result').textContent = winner + 'の勝利！';
+                document.getElementById('restart').style.display = 'block';
+            }
+        };
+
+        // シーンの設定
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        
+        // カメラの設定
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 12);
+        camera.lookAt(0, 3, 0);
+        
+        // レンダラーの設定
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        
+        // 光源の設定
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7.5);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.camera.top = 10;
+        directionalLight.shadow.camera.bottom = -10;
+        directionalLight.shadow.camera.left = -10;
+        directionalLight.shadow.camera.right = 10;
+        scene.add(directionalLight);
+        
+        // 物理設定
+        const GRAVITY = 0.2;
+        const FLOOR_Y = 0;
+        const STAGE_SIZE = 8; // ステージの半径
+        const RING_OUT_BONUS = 20; // リングアウトボーナスダメージ
+        
+        // 床の作成（円形のステージ）
+        const stageGeometry = new THREE.CylinderGeometry(STAGE_SIZE, STAGE_SIZE, 1, 32);
+        const stageMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x999999,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const stage = new THREE.Mesh(stageGeometry, stageMaterial);
+        stage.position.y = -0.5; // 床の厚みの半分だけ下げる
+        stage.receiveShadow = true;
+        scene.add(stage);
+        
+        // 床の周りに落下領域を可視化
+        const fallAreaGeometry = new THREE.RingGeometry(STAGE_SIZE, STAGE_SIZE + 2, 32);
+        const fallAreaMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x333333,
+            side: THREE.DoubleSide
+        });
+        const fallArea = new THREE.Mesh(fallAreaGeometry, fallAreaMaterial);
+        fallArea.rotation.x = -Math.PI / 2;
+        fallArea.position.y = -0.49; // 床のすぐ上
+        scene.add(fallArea);
+
+        // キャラクター作成関数
+        function createCharacter(color, position) {
+            const character = {
+                root: new THREE.Object3D(),
+                joints: {},
+                animations: {
+                    punch: false,
+                    kick: false,
+                    jump: false,
+                    jumpHeight: 0,
+                    knockback: false,
+                    knockbackTime: 0,
+                    down: false,
+                    downTime: 0,
+                    getUp: false,
+                    getUpTime: 0,
+                    falling: false
+                },
+                velocity: new THREE.Vector3(0, 0, 0),
+                onGround: true,
+                isHit: false,
+                invincible: false,
+                invincibleTime: 0,
+                isFalling: false
+            };
+            
+            character.root.position.copy(position);
+            scene.add(character.root);
+            
+            // 体の作成
+            const torsoGeometry = new THREE.BoxGeometry(1, 1.5, 0.6);
+            const material = new THREE.MeshStandardMaterial({ color: color });
+            character.joints.torso = new THREE.Mesh(torsoGeometry, material);
+            character.joints.torso.position.y = 3;
+            character.joints.torso.castShadow = true;
+            character.root.add(character.joints.torso);
+            
+            // 頭の作成
+            const headGeometry = new THREE.BoxGeometry(0.7, 0.7, 0.7);
+            character.joints.head = new THREE.Mesh(headGeometry, material);
+            character.joints.head.position.y = 1;
+            character.joints.head.castShadow = true;
+            character.joints.torso.add(character.joints.head);
+            
+            // 腕の作成
+            function createArm(side, sideMultiplier) {
+                const upperArmGeometry = new THREE.BoxGeometry(0.3, 0.7, 0.3);
+                character.joints[`upper${side}Arm`] = new THREE.Mesh(upperArmGeometry, material);
+                character.joints[`upper${side}Arm`].position.set(sideMultiplier * 0.6, 0.4, 0);
+                character.joints[`upper${side}Arm`].castShadow = true;
+                character.joints.torso.add(character.joints[`upper${side}Arm`]);
+                
+                const lowerArmGeometry = new THREE.BoxGeometry(0.25, 0.7, 0.25);
+                character.joints[`lower${side}Arm`] = new THREE.Mesh(lowerArmGeometry, material);
+                character.joints[`lower${side}Arm`].position.y = -0.7;
+                character.joints[`lower${side}Arm`].castShadow = true;
+                character.joints[`upper${side}Arm`].add(character.joints[`lower${side}Arm`]);
+                
+                const handGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+                character.joints[`${side.toLowerCase()}Hand`] = new THREE.Mesh(handGeometry, material);
+                character.joints[`${side.toLowerCase()}Hand`].position.y = -0.5;
+                character.joints[`${side.toLowerCase()}Hand`].castShadow = true;
+                character.joints[`lower${side}Arm`].add(character.joints[`${side.toLowerCase()}Hand`]);
+            }
+            
+            createArm('Left', -1);
+            createArm('Right', 1);
+            
+            // 脚の作成
+            function createLeg(side, sideMultiplier) {
+                const upperLegGeometry = new THREE.BoxGeometry(0.4, 0.8, 0.4);
+                character.joints[`upper${side}Leg`] = new THREE.Mesh(upperLegGeometry, material);
+                character.joints[`upper${side}Leg`].position.set(sideMultiplier * 0.3, -0.9, 0);
+                character.joints[`upper${side}Leg`].castShadow = true;
+                character.joints.torso.add(character.joints[`upper${side}Leg`]);
+                
+                const lowerLegGeometry = new THREE.BoxGeometry(0.35, 0.8, 0.35);
+                character.joints[`lower${side}Leg`] = new THREE.Mesh(lowerLegGeometry, material);
+                character.joints[`lower${side}Leg`].position.y = -0.8;
+                character.joints[`lower${side}Leg`].castShadow = true;
+                character.joints[`upper${side}Leg`].add(character.joints[`lower${side}Leg`]);
+                
+                const footGeometry = new THREE.BoxGeometry(0.4, 0.2, 0.6);
+                character.joints[`${side.toLowerCase()}Foot`] = new THREE.Mesh(footGeometry, material);
+                character.joints[`${side.toLowerCase()}Foot`].position.set(0, -0.5, 0.1);
+                character.joints[`${side.toLowerCase()}Foot`].castShadow = true;
+                character.joints[`lower${side}Leg`].add(character.joints[`${side.toLowerCase()}Foot`]);
+            }
+            
+            createLeg('Left', -1);
+            createLeg('Right', 1);
+            
+            return character;
+        }
+        
+        // プレイヤーとエネミーの作成
+        gameState.player = createCharacter(0x0066cc, new THREE.Vector3(-3, 0, 0));
+        gameState.enemy = createCharacter(0xcc0000, new THREE.Vector3(3, 0, 0));
+        
+        // 入力ハンドラ
+        window.addEventListener('keydown', (e) => {
+            gameState.keys[e.key.toLowerCase()] = true;
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            gameState.keys[e.key.toLowerCase()] = false;
+        });
+        
+        // パンチのアニメーション
+        function animatePunch(character, side) {
+            const upperArm = character.joints[`upper${side}Arm`];
+            const lowerArm = character.joints[`lower${side}Arm`];
+            
+            if (character.animations.punch < 0.5) {
+                // パンチを繰り出す
+                upperArm.rotation.x = -character.animations.punch * 2 * Math.PI / 2;
+                lowerArm.rotation.x = -character.animations.punch * 2 * Math.PI / 4;
+            } else {
+                // 腕を戻す
+                const t = (character.animations.punch - 0.5) * 2;
+                upperArm.rotation.x = -(1 - t) * Math.PI / 2;
+                lowerArm.rotation.x = -(1 - t) * Math.PI / 4;
+            }
+            
+            character.animations.punch += 0.05;
+            if (character.animations.punch >= 1) {
+                character.animations.punch = false;
+                upperArm.rotation.set(0, 0, 0);
+                lowerArm.rotation.set(0, 0, 0);
+            }
+        }
+        
+        // キックのアニメーション
+        function animateKick(character, side) {
+            const upperLeg = character.joints[`upper${side}Leg`];
+            const lowerLeg = character.joints[`lower${side}Leg`];
+            
+            if (character.animations.kick < 0.5) {
+                // キックを繰り出す
+                upperLeg.rotation.x = character.animations.kick * 2 * Math.PI / 3;
+                lowerLeg.rotation.x = character.animations.kick * 2 * Math.PI / 2;
+            } else {
+                // 脚を戻す
+                const t = (character.animations.kick - 0.5) * 2;
+                upperLeg.rotation.x = (1 - t) * Math.PI / 3;
+                lowerLeg.rotation.x = (1 - t) * Math.PI / 2;
+            }
+            
+            character.animations.kick += 0.05;
+            if (character.animations.kick >= 1) {
+                character.animations.kick = false;
+                upperLeg.rotation.set(0, 0, 0);
+                lowerLeg.rotation.set(0, 0, 0);
+            }
+        }
+        
+        // ジャンプのアニメーション（重力適用）
+        function animateJump(character) {
+            if (!character.animations.jump) return;
+            
+            // ジャンプの初期段階
+            if (character.animations.jump === 0.01) {
+                character.velocity.y = 0.3; // 初期上昇速度
+            }
+            
+            // 重力を適用
+            character.velocity.y -= GRAVITY * 0.2;
+            character.animations.jumpHeight += character.velocity.y;
+            
+            // 地面に着地したら終了
+            if (character.animations.jumpHeight <= 0 && character.animations.jump > 0.3) {
+                character.animations.jump = false;
+                character.animations.jumpHeight = 0;
+                character.root.position.y = 0;
+                character.onGround = true;
+                character.velocity.y = 0;
+                return;
+            }
+            
+            character.root.position.y = Math.max(0, character.animations.jumpHeight);
+            character.animations.jump += 0.02;
+        }
+        
+        // AIの制御
+        function updateAI(delta) {
+            const enemy = gameState.enemy;
+            const player = gameState.player;
+            
+            // ダウン中や起き上がり中は動かない
+            if (enemy.animations.down || enemy.animations.getUp || enemy.animations.knockback) {
+                return;
+            }
+            
+            // プレイヤーに向ける
+            enemy.root.lookAt(player.root.position);
+            enemy.root.rotation.y += Math.PI; // 180度回転
+            
+            // プレイヤーとの距離
+            const distance = enemy.root.position.distanceTo(player.root.position);
+            
+            // 一定の確率でアクションを取る
+            if (Math.random() < 0.01 && !enemy.animations.punch && !enemy.animations.kick && !enemy.animations.jump) {
+                if (distance < 2.5) {
+                    // 近距離ではパンチ
+                    enemy.animations.punch = 0.01;
+                } else if (distance < 3.5) {
+                    // 中距離ではキック
+                    enemy.animations.kick = 0.01;
+                } else {
+                    // 遠距離では近づく
+                    enemy.velocity.x = Math.sign(player.root.position.x - enemy.root.position.x) * 2;
+                }
+            }
+            
+            // アニメーションの更新
+            if (enemy.animations.punch) {
+                animatePunch(enemy, 'Right');
+            }
+            
+            if (enemy.animations.kick) {
+                animateKick(enemy, 'Right');
+            }
+            
+            if (enemy.animations.jump) {
+                animateJump(enemy);
+            }
+            
+            // 移動の更新
+            if (!enemy.animations.punch && !enemy.animations.kick) {
+                enemy.root.position.x += enemy.velocity.x * delta;
+            }
+            
+            // 減衰
+            enemy.velocity.x *= 0.9;
+        }
+        
+        // プレイヤーの入力処理
+        function handleInput(delta) {
+            const player = gameState.player;
+            
+            // ダウン中や起き上がり中は動かない
+            if (player.animations.down || player.animations.getUp || player.animations.knockback) {
+                return;
+            }
+            
+            // クールダウンの更新
+            if (gameState.actions.cooldown > 0) {
+                gameState.actions.cooldown -= delta;
+            }
+            
+            // 移動
+            if (gameState.keys['a'] && !player.animations.punch && !player.animations.kick) {
+                player.velocity.x = -3;
+                player.root.rotation.y = Math.PI / 2;
+            } else if (gameState.keys['d'] && !player.animations.punch && !player.animations.kick) {
+                player.velocity.x = 3;
+                player.root.rotation.y = -Math.PI / 2;
+            } else {
+                player.velocity.x *= 0.9;
+            }
+            
+            // ジャンプ
+            if (gameState.keys['w'] && player.onGround && !player.animations.jump) {
+                player.animations.jump = 0.01;
+                player.onGround = false;
+            }
+            
+            // パンチ
+            if (gameState.keys['j'] && !player.animations.punch && !player.animations.kick && gameState.actions.cooldown <= 0) {
+                player.animations.punch = 0.01;
+                gameState.actions.cooldown = 0.5;
+            }
+            
+            // キック
+            if (gameState.keys['k'] && !player.animations.punch && !player.animations.kick && gameState.actions.cooldown <= 0) {
+                player.animations.kick = 0.01;
+                gameState.actions.cooldown = 0.5;
+            }
+            
+            // アニメーションの更新
+            if (player.animations.punch) {
+                animatePunch(player, 'Right');
+            }
+            
+            if (player.animations.kick) {
+                animateKick(player, 'Right');
+            }
+            
+            if (player.animations.jump) {
+                animateJump(player);
+            }
+            
+            // 移動の更新
+            player.root.position.x += player.velocity.x * delta;
+        }
+        
+        // ノックバックアニメーション
+        function animateKnockback(character) {
+            // キャラクターを倒す
+            character.joints.torso.rotation.z = Math.sign(character.velocity.x) * character.animations.knockbackTime * Math.PI / 6;
+            
+            character.animations.knockbackTime += 0.05;
+            if (character.animations.knockbackTime >= 1) {
+                character.animations.knockback = false;
+                character.animations.knockbackTime = 0;
+                character.joints.torso.rotation.z = 0;
+                character.isHit = false;
+            }
+        }
+        
+        // ダウンアニメーション（重力要素追加）
+        function animateDown(character) {
+            // キャラクターを物理的に倒す
+            const torso = character.joints.torso;
+            const fallingDirection = Math.sign(character.velocity.x);
+            
+            // 倒れる回転を徐々に適用（重力効果）
+            if (character.animations.downTime < 0.5) {
+                // 最初は緩やかに倒れ始める
+                torso.rotation.z = fallingDirection * character.animations.downTime * Math.PI;
+            } else {
+                // 加速度的に倒れる（重力のような効果）
+                torso.rotation.z = fallingDirection * (Math.PI / 2 + Math.pow(character.animations.downTime - 0.5, 2) * Math.PI / 2);
+            }
+            
+            character.animations.downTime += 0.02;
+            if (character.animations.downTime >= 1) {
+                character.animations.down = false;
+                character.animations.downTime = 0;
+                character.animations.getUp = true;
+                character.animations.getUpTime = 0;
+            }
+        }
+        
+        // 落下アニメーション
+        function animateFalling(character) {
+            // 落下中は重力で加速
+            character.velocity.y -= GRAVITY;
+            character.root.position.y += character.velocity.y;
+            
+            // 回転も加える（回転しながら落ちる）
+            character.root.rotation.z += character.velocity.x * 0.05;
+            character.root.rotation.x += 0.05;
+            
+            // 完全に画面外に落ちたら判定
+            if (character.root.position.y < -10) {
+                // 完全に落下した
+                gameState.gameOver = true;
+                
+                // 落ちたのが敵ならプレイヤーの勝ち、そうでなければ敵の勝ち
+                if (character === gameState.enemy) {
+                    gameState.showResult('プレイヤー');
+                } else {
+                    gameState.showResult('敵');
+                }
+            }
+        }
+        
+        // 起き上がりアニメーション
+        function animateGetUp(character) {
+            // 起き上がる
+            character.joints.torso.rotation.z = Math.sign(character.velocity.x) * (1 - character.animations.getUpTime) * Math.PI / 2;
+            
+            character.animations.getUpTime += 0.02;
+            if (character.animations.getUpTime >= 1) {
+                character.animations.getUp = false;
+                character.animations.getUpTime = 0;
+                character.joints.torso.rotation.z = 0;
+                character.invincible = true;
+                character.invincibleTime = 0;
+            }
+        }
+        
+        // 当たり判定チェック
+        function checkCollisions() {
+            if (gameState.gameOver) return;
+            
+            const player = gameState.player;
+            const enemy = gameState.enemy;
+            
+            // キャラクター間の距離
+            const distance = player.root.position.distanceTo(enemy.root.position);
+            
+            // 無敵時間の更新
+            if (player.invincible) {
+                player.invincibleTime += 0.016;
+                if (player.invincibleTime > 1) {
+                    player.invincible = false;
+                }
+            }
+            
+            if (enemy.invincible) {
+                enemy.invincibleTime += 0.016;
+                if (enemy.invincibleTime > 1) {
+                    enemy.invincible = false;
+                }
+            }
+            
+            // ステージからの落下チェック
+            checkStageFall(player);
+            checkStageFall(enemy);
+            
+            // 落下中は当たり判定をスキップ
+            if (player.animations.falling || enemy.animations.falling) return;
+            
+            // プレイヤーのパンチによる当たり判定
+            if (player.animations.punch > 0.3 && player.animations.punch < 0.6 && distance < 2 && 
+                !enemy.isHit && !enemy.invincible && !enemy.animations.down && !enemy.animations.getUp) {
+                // ヒット効果
+                enemy.velocity.x = Math.sign(enemy.root.position.x - player.root.position.x) * 5;
+                enemy.isHit = true;
+                enemy.animations.knockback = true;
+                enemy.animations.knockbackTime = 0;
+                
+                // ダメージ
+                gameState.health.enemy -= 5;
+                if (gameState.health.enemy < 0) gameState.health.enemy = 0;
+                gameState.updateHealthUI();
+                
+                // 体力が少ないとダウン
+                if (gameState.health.enemy < 30 && Math.random() < 0.5) {
+                    enemy.animations.knockback = false;
+                    enemy.animations.down = true;
+                    enemy.animations.downTime = 0;
+                }
+                
+                // 勝敗判定
+                if (gameState.health.enemy <= 0) {
+                    gameState.gameOver = true;
+                    gameState.showResult('プレイヤー');
+                }
+            }
+            
+            // プレイヤーのキックによる当たり判定
+            if (player.animations.kick > 0.3 && player.animations.kick < 0.6 && distance < 2.5 && 
+                !enemy.isHit && !enemy.invincible && !enemy.animations.down && !enemy.animations.getUp) {
+                // ヒット効果
+                enemy.velocity.x = Math.sign(enemy.root.position.x - player.root.position.x) * 7;
+                enemy.isHit = true;
+                
+                // 強力なキックはノックダウン
+                enemy.animations.down = true;
+                enemy.animations.downTime = 0;
+                
+                // ダメージ
+                gameState.health.enemy -= 10;
+                if (gameState.health.enemy < 0) gameState.health.enemy = 0;
+                gameState.updateHealthUI();
+                
+                // 勝敗判定
+                if (gameState.health.enemy <= 0) {
+                    gameState.gameOver = true;
+                    gameState.showResult('プレイヤー');
+                }
+            }
+            
+            // 敵のパンチによる当たり判定
+            if (enemy.animations.punch > 0.3 && enemy.animations.punch < 0.6 && distance < 2 && 
+                !player.isHit && !player.invincible && !player.animations.down && !player.animations.getUp) {
+                // ヒット効果
+                player.velocity.x = Math.sign(player.root.position.x - enemy.root.position.x) * 5;
+                player.isHit = true;
+                player.animations.knockback = true;
+                player.animations.knockbackTime = 0;
+                
+                // ダメージ
+                gameState.health.player -= 5;
+                if (gameState.health.player < 0) gameState.health.player = 0;
+                gameState.updateHealthUI();
+                
+                // 体力が少ないとダウン
+                if (gameState.health.player < 30 && Math.random() < 0.5) {
+                    player.animations.knockback = false;
+                    player.animations.down = true;
+                    player.animations.downTime = 0;
+                }
+                
+                // 勝敗判定
+                if (gameState.health.player <= 0) {
+                    gameState.gameOver = true;
+                    gameState.showResult('敵');
+                }
+            }
+            
+            // 敵のキックによる当たり判定
+            if (enemy.animations.kick > 0.3 && enemy.animations.kick < 0.6 && distance < 2.5 && 
+                !player.isHit && !player.invincible && !player.animations.down && !player.animations.getUp) {
+                // ヒット効果
+                player.velocity.x = Math.sign(player.root.position.x - enemy.root.position.x) * 7;
+                player.isHit = true;
+                
+                // 強力なキックはノックダウン
+                player.animations.down = true;
+                player.animations.downTime = 0;
+                
+                // ダメージ
+                gameState.health.player -= 10;
+                if (gameState.health.player < 0) gameState.health.player = 0;
+                gameState.updateHealthUI();
+                
+                // 勝敗判定
+                if (gameState.health.player <= 0) {
+                    gameState.gameOver = true;
+                    gameState.showResult('敵');
+                }
+            }
+        }
+        
+        // ステージからの落下チェック
+        function checkStageFall(character) {
+            // 既に落下中の場合はスキップ
+            if (character.animations.falling) return;
+            
+            // キャラクターの水平位置を取得（XZ平面での位置）
+            const horizontalDistance = Math.sqrt(
+                character.root.position.x * character.root.position.x + 
+                character.root.position.z * character.root.position.z
+            );
+            
+            // ステージの端から出ているか確認
+            if (horizontalDistance > STAGE_SIZE) {
+                // 落下開始
+                character.animations.falling = true;
+                character.velocity.y = 0; // 初期落下速度
+                
+                // 他の動作をリセット
+                character.animations.punch = false;
+                character.animations.kick = false;
+                character.animations.jump = false;
+                character.animations.knockback = false;
+                character.animations.down = false;
+                character.animations.getUp = false;
+                
+                // ヘルスが0でなければリングアウトボーナスダメージを適用
+                if (character === gameState.player && gameState.health.player > 0) {
+                    gameState.health.player -= RING_OUT_BONUS;
+                    if (gameState.health.player < 0) gameState.health.player = 0;
+                    gameState.updateHealthUI();
+                } else if (character === gameState.enemy && gameState.health.enemy > 0) {
+                    gameState.health.enemy -= RING_OUT_BONUS;
+                    if (gameState.health.enemy < 0) gameState.health.enemy = 0;
+                    gameState.updateHealthUI();
+                }
+            }
+        }
+        
+        // アニメーションループ
+        let clock = new THREE.Clock();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            
+            if (!gameState.gameOver) {
+                // 入力処理
+                handleInput(delta);
+                
+                // AI更新
+                updateAI(delta);
+                
+                // 当たり判定
+                checkCollisions();
+            }
+            
+            // 境界制限は落下判定で行うため削除
+            
+            // ノックバックアニメーション
+            if (gameState.player.animations.knockback) {
+                animateKnockback(gameState.player);
+            }
+            
+            if (gameState.enemy.animations.knockback) {
+                animateKnockback(gameState.enemy);
+            }
+            
+            // ダウンアニメーション
+            if (gameState.player.animations.down) {
+                animateDown(gameState.player);
+            }
+            
+            if (gameState.enemy.animations.down) {
+                animateDown(gameState.enemy);
+            }
+            
+            // 起き上がりアニメーション
+            if (gameState.player.animations.getUp) {
+                animateGetUp(gameState.player);
+            }
+            
+            if (gameState.enemy.animations.getUp) {
+                animateGetUp(gameState.enemy);
+            }
+            
+            // 落下アニメーション
+            if (gameState.player.animations.falling) {
+                animateFalling(gameState.player);
+            }
+            
+            if (gameState.enemy.animations.falling) {
+                animateFalling(gameState.enemy);
+            }
+            
+            // ジャンプアニメーション（重力適用バージョン）
+            if (gameState.player.animations.jump) {
+                animateJump(gameState.player);
+            }
+            
+            if (gameState.enemy.animations.jump) {
+                animateJump(gameState.enemy);
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        // ウィンドウリサイズ対応
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // リスタートボタン
+        document.querySelector('#restart button').addEventListener('click', () => {
+            // ゲームをリセット
+            gameState.health.player = 100;
+            gameState.health.enemy = 100;
+            gameState.gameOver = false;
+            gameState.updateHealthUI();
+            
+            // プレイヤー位置をリセット
+            gameState.player.root.position.set(-3, 0, 0);
+            gameState.enemy.root.position.set(3, 0, 0);
+            
+            // 回転をリセット
+            gameState.player.joints.torso.rotation.set(0, 0, 0);
+            gameState.enemy.joints.torso.rotation.set(0, 0, 0);
+            
+            // アニメーション状態をリセット
+            gameState.player.animations.down = false;
+            gameState.player.animations.getUp = false;
+            gameState.player.animations.knockback = false;
+            gameState.enemy.animations.down = false;
+            gameState.enemy.animations.getUp = false;
+            gameState.enemy.animations.knockback = false;
+            
+            // 結果表示を非表示
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('restart').style.display = 'none';
+        });
+        
+        // キャラクターの初期配置を調整（ステージの中心に近づける）
+        gameState.player.root.position.set(-2, 0, 0);
+        gameState.enemy.root.position.set(2, 0, 0);
+        
+        // 初期化
+        gameState.updateHealthUI();
+        animate();
+    </script>
+</body>
+</html>
