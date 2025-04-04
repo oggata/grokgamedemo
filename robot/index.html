@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flying Robot Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+        }
+        #score {
+            position: absolute;
+            top: 40px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">↑: Boost Up | Space: Fire Missile | ←→: Move Left/Right</div>
+    <div id="score">Score: 0</div>
+    <div id="game-clear" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.7); padding: 20px; border-radius: 10px; color: white; font-family: Arial, sans-serif; font-size: 30px; text-align: center;">
+        <div style="font-size: 48px; margin-bottom: 20px;">GAME CLEAR!</div>
+        <div>Your Score: <span id="final-score">0</span></div>
+        <button id="restart-button" style="margin-top: 20px; padding: 10px 20px; font-size: 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">Play Again</button>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Game variables
+        let scene, camera, renderer;
+        let playerRobot, enemies = [];
+        let missiles = [];
+        let isBoostPressed = false;
+        let score = 0;
+        let scoreElement;
+        let ground, buildings = [];
+        let gameOver = false;
+
+        // Constants
+        const GRAVITY = 0.05;
+        const BOOST_POWER = 0.15;
+        const FORWARD_SPEED = 0.3;
+        const MISSILE_SPEED = 1.5;
+        const MAX_ENEMIES = 15;
+        const ENEMY_SPAWN_INTERVAL = 2000; // ms
+        const GAME_DEPTH = 1000; // How far the game extends in Z axis
+        const GAME_WIDTH = 200; // Game width (X axis)
+        const GAME_HEIGHT = 100; // Game height (Y axis)
+        const GROUND_LEVEL = -20; // Y position of the ground
+
+        // Initialize the game
+        function init() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+            scene.fog = new THREE.Fog(0x87CEEB, 50, 500); // Add fog for depth perception
+
+            // Create camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.set(0, 0, 10);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Add lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(0, 10, 5);
+            scene.add(directionalLight);
+
+            // Create ground and buildings
+            createGround();
+            createBuildings();
+            
+            // Create player robot
+            createPlayerRobot();
+
+            // Get UI elements
+            scoreElement = document.getElementById('score');
+            document.getElementById('restart-button').addEventListener('click', restartGame);
+
+            // Add event listeners
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('keyup', handleKeyUp);
+            window.addEventListener('resize', onWindowResize);
+
+            // Start spawning enemies
+            setInterval(spawnEnemy, ENEMY_SPAWN_INTERVAL);
+
+            // Start the game loop
+            animate();
+        }
+
+        // Create ground plane
+        function createGround() {
+            const groundGeometry = new THREE.PlaneGeometry(GAME_WIDTH * 3, GAME_DEPTH * 2);
+            const groundMaterial = new THREE.MeshPhongMaterial({
+                color: 0x4CAF50, // Green color for ground
+                side: THREE.DoubleSide,
+                shininess: 0
+            });
+            ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = Math.PI / 2;
+            ground.position.y = GROUND_LEVEL;
+            scene.add(ground);
+
+            // Add grid lines for better perspective
+            const gridHelper = new THREE.GridHelper(GAME_WIDTH * 3, 60, 0x000000, 0x000000);
+            gridHelper.position.y = GROUND_LEVEL + 0.1;
+            gridHelper.material.opacity = 0.2;
+            gridHelper.material.transparent = true;
+            scene.add(gridHelper);
+        }
+
+        // Create buildings and trees
+        function createBuildings() {
+            // Create several buildings
+            for (let i = 0; i < 40; i++) {
+                createRandomBuilding();
+            }
+            
+            // Create several trees
+            for (let i = 0; i < 60; i++) {
+                createRandomTree();
+            }
+        }
+
+        // Create a random building
+        function createRandomBuilding() {
+            const x = (Math.random() - 0.5) * GAME_WIDTH * 2;
+            const z = -Math.random() * GAME_DEPTH - 20;
+            
+            // Random height for building
+            const height = Math.random() * 30 + 5;
+            const width = Math.random() * 10 + 5;
+            const depth = Math.random() * 10 + 5;
+
+            // Building
+            const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+            const color = Math.random() > 0.5 ? 0x9E9E9E : 0x607D8B; // Gray colors
+            const buildingMaterial = new THREE.MeshPhongMaterial({ color: color });
+            const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+            
+            // Position at ground level
+            building.position.set(x, GROUND_LEVEL + height / 2, z);
+            scene.add(building);
+            buildings.push(building);
+            
+            // Add windows
+            if (Math.random() > 0.3) {
+                addWindowsToBuilding(building, width, height, depth);
+            }
+        }
+        
+        // Add windows to a building
+        function addWindowsToBuilding(building, width, height, depth) {
+            const windowGeometry = new THREE.PlaneGeometry(0.7, 1.2);
+            const windowMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xFFEB3B,
+                emissive: 0xFFEB3B,
+                emissiveIntensity: 0.5
+            });
+            
+            // Front windows
+            const windowsPerFloor = Math.floor(width / 2);
+            const floors = Math.floor(height / 3);
+            
+            for (let floor = 0; floor < floors; floor++) {
+                for (let w = 0; w < windowsPerFloor; w++) {
+                    // Skip some windows randomly
+                    if (Math.random() < 0.3) continue;
+                    
+                    const windowMesh = new THREE.Mesh(windowGeometry, windowMaterial);
+                    const xPos = -width/2 + 1 + w * 2;
+                    const yPos = -height/2 + 2 + floor * 3;
+                    
+                    // Front face
+                    const frontWindow = windowMesh.clone();
+                    frontWindow.position.set(xPos, yPos, depth/2 + 0.1);
+                    building.add(frontWindow);
+                    
+                    // Back face
+                    const backWindow = windowMesh.clone();
+                    backWindow.position.set(xPos, yPos, -depth/2 - 0.1);
+                    backWindow.rotation.y = Math.PI;
+                    building.add(backWindow);
+                    
+                    // Side faces
+                    if (depth > 5) {
+                        const sideWindowsCount = Math.floor(depth / 2);
+                        for (let sw = 0; sw < sideWindowsCount; sw++) {
+                            if (Math.random() < 0.4) continue;
+                            
+                            const zPos = -depth/2 + 1 + sw * 2;
+                            
+                            // Left side
+                            const leftWindow = windowMesh.clone();
+                            leftWindow.position.set(-width/2 - 0.1, yPos, zPos);
+                            leftWindow.rotation.y = -Math.PI / 2;
+                            building.add(leftWindow);
+                            
+                            // Right side
+                            const rightWindow = windowMesh.clone();
+                            rightWindow.position.set(width/2 + 0.1, yPos, zPos);
+                            rightWindow.rotation.y = Math.PI / 2;
+                            building.add(rightWindow);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Create a random tree
+        function createRandomTree() {
+            const x = (Math.random() - 0.5) * GAME_WIDTH * 2.5;
+            const z = -Math.random() * GAME_DEPTH - 20;
+            
+            // Tree trunk
+            const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 4, 8);
+            const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 }); // Brown
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.set(x, GROUND_LEVEL + 2, z);
+            scene.add(trunk);
+            buildings.push(trunk); // Add to the buildings array for simplicity
+            
+            // Tree top (leaves)
+            const treeTopGeometry = new THREE.ConeGeometry(3, 6, 8);
+            const treeTopMaterial = new THREE.MeshPhongMaterial({ color: 0x2E7D32 }); // Dark green
+            const treeTop = new THREE.Mesh(treeTopGeometry, treeTopMaterial);
+            treeTop.position.set(0, 3, 0);
+            trunk.add(treeTop);
+            
+            // Add a second, smaller cone on top for pine trees sometimes
+            if (Math.random() > 0.5) {
+                const treeTop2 = new THREE.Mesh(
+                    new THREE.ConeGeometry(2, 4, 8),
+                    treeTopMaterial
+                );
+                treeTop2.position.set(0, 5, 0);
+                trunk.add(treeTop2);
+            }
+        }
+
+        // Create player robot
+        function createPlayerRobot() {
+            // Robot body
+            const bodyGeometry = new THREE.BoxGeometry(2, 1, 3);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x3366FF }); // Blue
+            playerRobot = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            scene.add(playerRobot);
+
+            // Head
+            const headGeometry = new THREE.SphereGeometry(0.6, 16, 16);
+            const headMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 }); // Gray
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.set(0, 0.8, 0.5);
+            playerRobot.add(head);
+
+            // Arms
+            const armGeometry = new THREE.BoxGeometry(0.4, 0.4, 2);
+            const armMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 }); // Gray
+            
+            const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+            leftArm.position.set(-1.2, 0, 0);
+            playerRobot.add(leftArm);
+            
+            const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+            rightArm.position.set(1.2, 0, 0);
+            playerRobot.add(rightArm);
+
+            // Legs
+            const legGeometry = new THREE.BoxGeometry(0.6, 1.5, 0.6);
+            const legMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 }); // Dark gray
+            
+            const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+            leftLeg.position.set(-0.5, -1.25, 0);
+            playerRobot.add(leftLeg);
+            
+            const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+            rightLeg.position.set(0.5, -1.25, 0);
+            playerRobot.add(rightLeg);
+
+            // Booster
+            const boosterGeometry = new THREE.CylinderGeometry(0.5, 0.3, 1.2, 16);
+            const boosterMaterial = new THREE.MeshPhongMaterial({ color: 0xCC3333 }); // Red
+            const booster = new THREE.Mesh(boosterGeometry, boosterMaterial);
+            booster.position.set(0, 0, -1.5);
+            booster.rotation.x = Math.PI / 2;
+            playerRobot.add(booster);
+
+            // Set initial position
+            playerRobot.position.set(0, 5, -5);
+            
+            // Add flame effect for booster (initially hidden)
+            const flameGeometry = new THREE.ConeGeometry(0.4, 1.5, 16);
+            const flameMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xFF6600,
+                transparent: true,
+                opacity: 0.8
+            });
+            const flame = new THREE.Mesh(flameGeometry, flameMaterial);
+            flame.position.set(0, 0, -2.2);
+            flame.rotation.x = Math.PI / 2;
+            flame.visible = false;
+            playerRobot.add(flame);
+            playerRobot.flame = flame;
+        }
+
+        // Create an enemy robot
+        function createEnemy() {
+            // Random position within game boundaries
+            const x = (Math.random() - 0.5) * GAME_WIDTH;
+            const y = (Math.random() - 0.5) * GAME_HEIGHT;
+            const z = -GAME_DEPTH * Math.random() - 50; // Far away from player
+
+            // Enemy body
+            const bodyGeometry = new THREE.BoxGeometry(2, 1, 2);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0xCC3333 }); // Red
+            const enemy = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            enemy.position.set(x, y, z);
+            scene.add(enemy);
+
+            // Head
+            const headGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+            const headMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 }); // Dark gray
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.set(0, 0.7, 0.3);
+            enemy.add(head);
+
+            // Arms
+            const armGeometry = new THREE.BoxGeometry(0.3, 0.3, 1.5);
+            const armMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 }); // Dark gray
+            
+            const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+            leftArm.position.set(-1.1, 0, 0);
+            enemy.add(leftArm);
+            
+            const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+            rightArm.position.set(1.1, 0, 0);
+            enemy.add(rightArm);
+
+            return enemy;
+        }
+
+        // Spawn a new enemy
+        function spawnEnemy() {
+            if (enemies.length < MAX_ENEMIES) {
+                const enemy = createEnemy();
+                enemies.push(enemy);
+            }
+        }
+
+        // Fire a missile
+        function fireMissile() {
+            const missileGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.8, 8);
+            const missileMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFF00 }); // Yellow
+            const missile = new THREE.Mesh(missileGeometry, missileMaterial);
+            
+            // Set missile position at the front of the robot
+            missile.position.copy(playerRobot.position);
+            missile.position.z -= 2;
+            
+            // Rotate missile to fly forward
+            missile.rotation.x = Math.PI / 2;
+            
+            scene.add(missile);
+            missiles.push(missile);
+        }
+
+        // Create explosion effect
+        function createExplosion(position) {
+            // Create explosion particles
+            for (let i = 0; i < 15; i++) {
+                const size = Math.random() * 0.5 + 0.1;
+                const geometry = new THREE.BoxGeometry(size, size, size);
+                const material = new THREE.MeshPhongMaterial({ 
+                    color: Math.random() > 0.5 ? 0xFF4500 : 0xFFD700,
+                });
+                const particle = new THREE.Mesh(geometry, material);
+                
+                // Position particle at explosion center
+                particle.position.copy(position);
+                
+                // Add random velocity
+                particle.userData.velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.3,
+                    (Math.random() - 0.5) * 0.3,
+                    (Math.random() - 0.5) * 0.3
+                );
+                
+                scene.add(particle);
+                
+                // Remove particle after animation
+                setTimeout(() => {
+                    scene.remove(particle);
+                }, 1000);
+                
+                // Add to update loop
+                particle.userData.isExplosionParticle = true;
+            }
+        }
+
+        // Check for collision between missile and enemy
+        function checkMissileCollisions() {
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                const missile = missiles[i];
+                
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    
+                    // Simple distance-based collision detection
+                    const distance = missile.position.distanceTo(enemy.position);
+                    if (distance < 2) {
+                        // Create explosion
+                        createExplosion(enemy.position);
+                        
+                        // Remove enemy and missile
+                        scene.remove(enemy);
+                        enemies.splice(j, 1);
+                        
+                        scene.remove(missile);
+                        missiles.splice(i, 1);
+                        
+                        // Update score
+                        score += 100;
+                        scoreElement.textContent = `Score: ${score}`;
+                        
+                        // Check if player reached target score
+                        checkGameClear();
+                        
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Check if player has reached target score
+        function checkGameClear() {
+            if (score >= 1000 && !gameOver) {
+                gameOver = true;
+                
+                // Show game clear screen
+                const gameClearElement = document.getElementById('game-clear');
+                gameClearElement.style.display = 'block';
+                
+                // Update final score
+                document.getElementById('final-score').textContent = score;
+                
+                // Add a victory animation to the player robot
+                playerRobot.userData.victoryAnimation = true;
+            }
+        }
+        
+        // Restart the game
+        function restartGame() {
+            // Hide game clear screen
+            document.getElementById('game-clear').style.display = 'none';
+            
+            // Reset score
+            score = 0;
+            scoreElement.textContent = `Score: ${score}`;
+            
+            // Reset game state
+            gameOver = false;
+            
+            // Reset player position
+            playerRobot.position.set(0, 5, -5);
+            playerRobot.rotation.set(0, 0, 0);
+            playerRobot.userData.victoryAnimation = false;
+            
+            // Remove all enemies
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                scene.remove(enemies[i]);
+            }
+            enemies = [];
+            
+            // Remove all missiles
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                scene.remove(missiles[i]);
+            }
+            missiles = [];
+        }
+
+        // Update game state
+        function update() {
+            // Check for game clear
+            checkGameClear();
+            
+            // If game is over, only handle victory animation
+            if (gameOver) {
+                if (playerRobot.userData.victoryAnimation) {
+                    // Make the robot do a victory spinning animation
+                    playerRobot.rotation.y += 0.05;
+                    playerRobot.position.y = 5 + Math.sin(Date.now() * 0.003) * 2;
+                }
+                return;
+            }
+            
+            // Move player forward
+            playerRobot.position.z -= FORWARD_SPEED;
+            
+            // Apply gravity/boost to player
+            if (isBoostPressed) {
+                playerRobot.position.y += BOOST_POWER;
+                playerRobot.flame.visible = true;
+            } else {
+                playerRobot.position.y -= GRAVITY;
+                playerRobot.flame.visible = false;
+            }
+            
+            // Keep player within bounds
+            playerRobot.position.y = Math.max(GROUND_LEVEL + 1, Math.min(GAME_HEIGHT, playerRobot.position.y));
+            playerRobot.position.x = Math.max(-GAME_WIDTH/2, Math.min(GAME_WIDTH/2, playerRobot.position.x));
+            
+            // Update camera position to follow player
+            camera.position.set(playerRobot.position.x, playerRobot.position.y + 5, playerRobot.position.z + 15);
+            camera.lookAt(playerRobot.position);
+            
+            // Update ground position to follow player in z direction
+            ground.position.z = Math.floor(playerRobot.position.z / 100) * 100;
+            
+            // Update missiles
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                const missile = missiles[i];
+                missile.position.z -= MISSILE_SPEED;
+                
+                // Remove missiles that go too far
+                if (missile.position.z < -GAME_DEPTH) {
+                    scene.remove(missile);
+                    missiles.splice(i, 1);
+                }
+            }
+            
+            // Update enemies
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                
+                // Move enemies toward player
+                const directionToPlayer = new THREE.Vector3().subVectors(playerRobot.position, enemy.position).normalize();
+                enemy.position.add(directionToPlayer.multiplyScalar(0.2));
+                
+                // Remove enemies that get too close to camera
+                if (enemy.position.z > 10) {
+                    scene.remove(enemy);
+                    enemies.splice(i, 1);
+                }
+                
+                // Check collision with player
+                const distanceToPlayer = enemy.position.distanceTo(playerRobot.position);
+                if (distanceToPlayer < 3) {
+                    // Create explosion
+                    createExplosion(enemy.position);
+                    
+                    // Remove enemy
+                    scene.remove(enemy);
+                    enemies.splice(i, 1);
+                    
+                    // Update score
+                    score += 50;
+                    scoreElement.textContent = `Score: ${score}`;
+                    
+                    // Check if player reached target score
+                    checkGameClear();
+                }
+            }
+            
+            // Check missile collisions
+            checkMissileCollisions();
+            
+            // Update explosion particles
+            scene.children.forEach(child => {
+                if (child.userData.isExplosionParticle) {
+                    child.position.add(child.userData.velocity);
+                    child.rotation.x += 0.05;
+                    child.rotation.y += 0.05;
+                }
+            });
+        }
+
+        // Handle key down events
+        function handleKeyDown(event) {
+            // Don't process controls if game is over
+            if (gameOver) {
+                // Allow pressing space to restart after victory
+                if (event.key === ' ') {
+                    restartGame();
+                }
+                return;
+            }
+            
+            if (event.key === 'ArrowUp') {
+                isBoostPressed = true;
+            } else if (event.key === ' ') { // Space key
+                fireMissile();
+            } else if (event.key === 'ArrowLeft') {
+                playerRobot.position.x -= 1.0;
+                playerRobot.rotation.z = Math.PI / 12; // Tilt when moving left
+            } else if (event.key === 'ArrowRight') {
+                playerRobot.position.x += 1.0;
+                playerRobot.rotation.z = -Math.PI / 12; // Tilt when moving right
+            }
+        }
+
+        // Handle key up events
+        function handleKeyUp(event) {
+            if (event.key === 'ArrowUp') {
+                isBoostPressed = false;
+            } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                playerRobot.rotation.z = 0; // Reset tilt when keys are released
+            }
+        }
+
+        // Handle window resize
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            update();
+            renderer.render(scene, camera);
+        }
+
+        // Start the game
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battleship Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            text-shadow: 1px 1px 1px black;
+        }
+        #score {
+            position: absolute;
+            top: 40px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            text-shadow: 1px 1px 1px black;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">クリックして砲弾を発射</div>
+    <div id="score">スコア: 0</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ゲーム変数
+        let scene, camera, renderer;
+        let playerShip, enemyShips = [];
+        let cannonballs = [];
+        let waterMesh;
+        let particles = [];
+        let score = 0;
+        const ENEMY_COUNT = 5;
+        const GAME_WIDTH = 1000;
+        const GAME_DEPTH = 1000;
+
+        // ゲーム初期化
+        function init() {
+            // シーン作成
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x5599ff, 0.0015);
+            
+            // カメラ設定
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
+            camera.position.set(0, 100, 300);
+            camera.lookAt(0, 0, -200);
+            
+            // レンダラー設定
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x5599ff);
+            document.body.appendChild(renderer.domElement);
+            
+            // 光源設定
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+            scene.add(new THREE.AmbientLight(0x404040));
+            
+            // 海の作成
+            createWater();
+            
+            // プレイヤーの戦艦作成
+            createPlayerShip();
+            
+            // 敵の戦艦作成
+            for (let i = 0; i < ENEMY_COUNT; i++) {
+                createEnemyShip();
+            }
+            
+            // イベントリスナー設定
+            window.addEventListener('resize', onWindowResize, false);
+            window.addEventListener('click', onMouseClick, false);
+            
+            // マウス座標管理用の変数
+            const mouse = new THREE.Vector2();
+            const raycaster = new THREE.Raycaster();
+            
+            // アニメーションループ開始
+            animate();
+        }
+        
+        // 海の作成
+        function createWater() {
+            const waterGeometry = new THREE.PlaneGeometry(GAME_WIDTH, GAME_DEPTH);
+            const waterMaterial = new THREE.MeshPhongMaterial({
+                color: 0x0066ff,
+                shininess: 30,
+                transparent: true,
+                opacity: 0.8
+            });
+            waterMesh = new THREE.Mesh(waterGeometry, waterMaterial);
+            waterMesh.rotation.x = -Math.PI / 2;
+            waterMesh.position.y = -5;
+            scene.add(waterMesh);
+        }
+        
+        // プレイヤーの戦艦作成
+        function createPlayerShip() {
+            playerShip = new THREE.Group();
+            
+            // 船体
+            const hullGeometry = new THREE.BoxGeometry(20, 10, 60);
+            const hullMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+            const hull = new THREE.Mesh(hullGeometry, hullMaterial);
+            hull.position.y = 0;
+            playerShip.add(hull);
+            
+            // 上部構造物
+            const superstructureGeometry = new THREE.BoxGeometry(10, 15, 20);
+            const superstructureMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 });
+            const superstructure = new THREE.Mesh(superstructureGeometry, superstructureMaterial);
+            superstructure.position.set(0, 5, -10);
+            playerShip.add(superstructure);
+            
+            // 砲塔
+            const turretGeometry = new THREE.CylinderGeometry(5, 5, 5, 8);
+            const turretMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const turret = new THREE.Mesh(turretGeometry, turretMaterial);
+            turret.position.set(0, 8, 10);
+            playerShip.add(turret);
+            
+            // 砲身
+            const barrelGeometry = new THREE.CylinderGeometry(1, 1, 15, 8);
+            const barrelMaterial = new THREE.MeshPhongMaterial({ color: 0x222222 });
+            const barrel = new THREE.Mesh(barrelGeometry, barrelMaterial);
+            barrel.rotation.x = Math.PI / 4;
+            barrel.position.set(0, 8, 18);
+            playerShip.add(barrel);
+            
+            playerShip.position.set(0, 0, 150);
+            scene.add(playerShip);
+        }
+        
+        // 敵の戦艦作成
+        function createEnemyShip() {
+            const enemyShip = new THREE.Group();
+            
+            // 船体
+            const hullGeometry = new THREE.BoxGeometry(15, 8, 45);
+            const hullMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+            const hull = new THREE.Mesh(hullGeometry, hullMaterial);
+            hull.position.y = 0;
+            enemyShip.add(hull);
+            
+            // 上部構造物
+            const superstructureGeometry = new THREE.BoxGeometry(8, 10, 15);
+            const superstructureMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 });
+            const superstructure = new THREE.Mesh(superstructureGeometry, superstructureMaterial);
+            superstructure.position.set(0, 4, 5);
+            enemyShip.add(superstructure);
+            
+            // 砲塔
+            const turretGeometry = new THREE.CylinderGeometry(4, 4, 4, 8);
+            const turretMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const turret = new THREE.Mesh(turretGeometry, turretMaterial);
+            turret.position.set(0, 7, -10);
+            enemyShip.add(turret);
+            
+            // 砲身
+            const barrelGeometry = new THREE.CylinderGeometry(0.8, 0.8, 10, 8);
+            const barrelMaterial = new THREE.MeshPhongMaterial({ color: 0x222222 });
+            const barrel = new THREE.Mesh(barrelGeometry, barrelMaterial);
+            barrel.rotation.x = -Math.PI / 4;
+            barrel.position.set(0, 7, -16);
+            enemyShip.add(barrel);
+            
+            // ランダムな位置に配置
+            const x = Math.random() * GAME_WIDTH - GAME_WIDTH / 2;
+            const z = Math.random() * (GAME_DEPTH / 2) - GAME_DEPTH / 2;
+            enemyShip.position.set(x, 0, z);
+            
+            // 移動用のプロパティ設定
+            enemyShip.userData = {
+                speed: 0.2 + Math.random() * 0.3,
+                direction: new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize(),
+                changeDirectionTime: Math.random() * 5 + 5,
+                timeElapsed: 0,
+                isHit: false,
+                sinkSpeed: 0,
+                rotationSpeed: 0
+            };
+            
+            scene.add(enemyShip);
+            enemyShips.push(enemyShip);
+        }
+        
+        // マウスクリックイベント処理
+        function onMouseClick(event) {
+            // マウス位置をノーマライズド座標に変換 (-1 から +1 の範囲)
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            // レイキャスターを更新
+            raycaster.setFromCamera(mouse, camera);
+            
+            // 海面との交点を計算
+            const intersects = raycaster.intersectObject(waterMesh);
+            
+            if (intersects.length > 0) {
+                // クリックした海面の位置
+                const targetPosition = intersects[0].point;
+                
+                // その方向に砲弾を発射
+                shootCannonball(targetPosition);
+            } else {
+                // 海面と交差しない場合はデフォルトの方向に発射
+                shootCannonball();
+            }
+        }
+        
+        // 砲弾発射
+        function shootCannonball(targetPosition) {
+            const cannonballGeometry = new THREE.SphereGeometry(2, 16, 16);
+            const cannonballMaterial = new THREE.MeshPhongMaterial({ color: 0x111111 });
+            const cannonball = new THREE.Mesh(cannonballGeometry, cannonballMaterial);
+            
+            // プレイヤーの戦艦の先端から発射
+            cannonball.position.copy(playerShip.position);
+            cannonball.position.z -= 10;
+            cannonball.position.y += 10;
+            
+            let velocity;
+            
+            if (targetPosition) {
+                // 目標位置への方向ベクトルを計算
+                const direction = new THREE.Vector3();
+                direction.subVectors(targetPosition, cannonball.position).normalize();
+                
+                // 放物線を描くように上方向の速度を追加
+                const speed = 5;
+                velocity = direction.multiplyScalar(speed);
+                velocity.y = Math.max(0.5, velocity.y + 1.0); // 最低でも少し上向きに
+            } else {
+                // デフォルトの発射方向（クリックが海面に当たらなかった場合）
+                const angle = Math.PI / 4; // 45度
+                const speed = 5;
+                const velocityY = Math.sin(angle) * speed;
+                const velocityZ = -Math.cos(angle) * speed;
+                const sideAngle = (Math.random() - 0.5) * Math.PI / 6; // ±30度
+                const velocityX = Math.sin(sideAngle) * speed;
+                
+                velocity = new THREE.Vector3(velocityX, velocityY, velocityZ);
+            }
+            
+            cannonball.userData = {
+                velocity: velocity,
+                gravity: 0.1
+            };
+            
+            scene.add(cannonball);
+            cannonballs.push(cannonball);
+        }
+        
+        // パーティクル作成（敵が撃沈されたとき）
+        function createExplosion(position) {
+            const particleCount = 120; // パーティクル数を増やす
+            
+            // 爆発の中心に大きな閃光を追加
+            const flashGeometry = new THREE.SphereGeometry(10, 16, 16);
+            const flashMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xffaa00,
+                transparent: true,
+                opacity: 0.8
+            });
+            const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+            flash.position.copy(position);
+            
+            flash.userData = {
+                lifespan: 30,
+                age: 0,
+                isFlash: true
+            };
+            
+            scene.add(flash);
+            particles.push(flash);
+            
+            for (let i = 0; i < particleCount; i++) {
+                // パーティクルのサイズをランダムに
+                const size = 0.8 + Math.random() * 1.5; // パーティクルを大きくする
+                const particleGeometry = new THREE.SphereGeometry(size, 8, 8);
+                
+                // より鮮やかな色
+                const particleMaterial = new THREE.MeshBasicMaterial({ 
+                    color: new THREE.Color(
+                        0.9 + Math.random() * 0.1,  // 赤
+                        0.2 + Math.random() * 0.3,  // より明るい緑
+                        Math.random() * 0.1         // 青
+                    ),
+                    transparent: true,
+                    opacity: 0.9
+                });
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                
+                // パーティクルの初期位置を設定（より広い範囲に）
+                particle.position.copy(position);
+                particle.position.x += (Math.random() - 0.5) * 20;
+                particle.position.y += Math.random() * 10;
+                particle.position.z += (Math.random() - 0.5) * 20;
+                
+                // パーティクルの速度を設定（より速く）
+                const speed = 1.0 + Math.random() * 2.0;
+                const angle = Math.random() * Math.PI * 2;
+                const elevation = Math.random() * Math.PI;
+                
+                particle.userData = {
+                    velocity: new THREE.Vector3(
+                        Math.sin(angle) * Math.sin(elevation) * speed,
+                        Math.cos(elevation) * speed,
+                        Math.cos(angle) * Math.sin(elevation) * speed
+                    ),
+                    lifespan: 80 + Math.random() * 80,  // より長い寿命
+                    age: 0
+                };
+                
+                scene.add(particle);
+                particles.push(particle);
+            }
+            
+            // 煙パーティクルも追加
+            for (let i = 0; i < 40; i++) {
+                const smokeSize = 2 + Math.random() * 3;
+                const smokeGeometry = new THREE.SphereGeometry(smokeSize, 8, 8);
+                const smokeMaterial = new THREE.MeshBasicMaterial({ 
+                    color: new THREE.Color(0.2 + Math.random() * 0.1, 0.2 + Math.random() * 0.1, 0.2 + Math.random() * 0.1),
+                    transparent: true,
+                    opacity: 0.3 + Math.random() * 0.3
+                });
+                const smoke = new THREE.Mesh(smokeGeometry, smokeMaterial);
+                
+                smoke.position.copy(position);
+                smoke.position.x += (Math.random() - 0.5) * 15;
+                smoke.position.y += 5 + Math.random() * 15;
+                smoke.position.z += (Math.random() - 0.5) * 15;
+                
+                const smokeSpeed = 0.2 + Math.random() * 0.5;
+                
+                smoke.userData = {
+                    velocity: new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.5,
+                        0.5 + Math.random() * 0.5,
+                        (Math.random() - 0.5) * 0.5
+                    ),
+                    lifespan: 120 + Math.random() * 120,
+                    age: 0,
+                    isSmoke: true
+                };
+                
+                scene.add(smoke);
+                particles.push(smoke);
+            }
+        }
+        
+        // ウィンドウリサイズ処理
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // 敵の戦艦を更新
+        function updateEnemyShips() {
+            for (let i = 0; i < enemyShips.length; i++) {
+                const enemy = enemyShips[i];
+                const userData = enemy.userData;
+                
+                if (userData.isHit) {
+                    // 撃沈演出
+                    enemy.position.y -= userData.sinkSpeed;
+                    userData.sinkSpeed += 0.01;
+                    
+                    enemy.rotation.x += userData.rotationSpeed;
+                    enemy.rotation.z += userData.rotationSpeed * 0.5;
+                    
+                    // 完全に沈んだら削除
+                    if (enemy.position.y < -20) {
+                        scene.remove(enemy);
+                        enemyShips.splice(i, 1);
+                        i--;
+                        
+                        // 新しい敵を生成
+                        createEnemyShip();
+                    }
+                } else {
+                    // 通常の移動
+                    userData.timeElapsed += 0.016; // 約16ms（60FPSの1フレーム）
+                    
+                    // 方向転換のタイミング
+                    if (userData.timeElapsed >= userData.changeDirectionTime) {
+                        userData.direction = new THREE.Vector3(
+                            Math.random() - 0.5,
+                            0,
+                            Math.random() - 0.5
+                        ).normalize();
+                        userData.changeDirectionTime = Math.random() * 5 + 5;
+                        userData.timeElapsed = 0;
+                    }
+                    
+                    // 移動
+                    enemy.position.x += userData.direction.x * userData.speed;
+                    enemy.position.z += userData.direction.z * userData.speed;
+                    
+                    // 向きを移動方向に合わせる
+                    if (Math.abs(userData.direction.x) > 0.1 || Math.abs(userData.direction.z) > 0.1) {
+                        enemy.rotation.y = Math.atan2(userData.direction.x, userData.direction.z);
+                    }
+                    
+                    // 境界チェック
+                    if (enemy.position.x < -GAME_WIDTH / 2) enemy.position.x = -GAME_WIDTH / 2;
+                    if (enemy.position.x > GAME_WIDTH / 2) enemy.position.x = GAME_WIDTH / 2;
+                    if (enemy.position.z < -GAME_DEPTH / 2) enemy.position.z = -GAME_DEPTH / 2;
+                    if (enemy.position.z > 0) enemy.position.z = 0;
+                }
+            }
+        }
+        
+        // 砲弾を更新
+        function updateCannonballs() {
+            for (let i = 0; i < cannonballs.length; i++) {
+                const cannonball = cannonballs[i];
+                const userData = cannonball.userData;
+                
+                // 速度を更新
+                userData.velocity.y -= userData.gravity;
+                
+                // 位置を更新
+                cannonball.position.x += userData.velocity.x;
+                cannonball.position.y += userData.velocity.y;
+                cannonball.position.z += userData.velocity.z;
+                
+                // 水面に落ちたら削除
+                if (cannonball.position.y < 0) {
+                    scene.remove(cannonball);
+                    cannonballs.splice(i, 1);
+                    i--;
+                    continue;
+                }
+                
+                // ゲームエリア外に出たら削除
+                if (
+                    cannonball.position.x < -GAME_WIDTH / 2 ||
+                    cannonball.position.x > GAME_WIDTH / 2 ||
+                    cannonball.position.z < -GAME_DEPTH / 2 ||
+                    cannonball.position.z > GAME_WIDTH / 2
+                ) {
+                    scene.remove(cannonball);
+                    cannonballs.splice(i, 1);
+                    i--;
+                    continue;
+                }
+                
+                // 敵との衝突判定
+                for (let j = 0; j < enemyShips.length; j++) {
+                    const enemy = enemyShips[j];
+                    
+                    // すでに撃沈された敵はスキップ
+                    if (enemy.userData.isHit) continue;
+                    
+                    // 衝突判定（簡易的な距離による判定）
+                    const dx = cannonball.position.x - enemy.position.x;
+                    const dy = cannonball.position.y - enemy.position.y;
+                    const dz = cannonball.position.z - enemy.position.z;
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    
+                    if (distance < 15) {  // 敵の船の大きさに合わせた判定距離
+                        // 敵を撃沈状態にする
+                        enemy.userData.isHit = true;
+                        enemy.userData.sinkSpeed = 0.1;
+                        enemy.userData.rotationSpeed = 0.01;
+                        
+                        // 爆発エフェクト
+                        createExplosion(enemy.position.clone());
+                        
+                        // 砲弾を削除
+                        scene.remove(cannonball);
+                        cannonballs.splice(i, 1);
+                        i--;
+                        
+                        // スコア加算
+                        score += 100;
+                        document.getElementById('score').innerHTML = 'スコア: ' + score;
+                        
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // パーティクルを更新
+        function updateParticles() {
+            for (let i = 0; i < particles.length; i++) {
+                const particle = particles[i];
+                const userData = particle.userData;
+                
+                // 年齢を更新
+                userData.age++;
+                
+                if (userData.isFlash) {
+                    // 爆発の閃光用の特別な処理
+                    const flashLifeRatio = 1 - (userData.age / userData.lifespan);
+                    particle.scale.set(1 + (1 - flashLifeRatio) * 2, 1 + (1 - flashLifeRatio) * 2, 1 + (1 - flashLifeRatio) * 2);
+                    particle.material.opacity = flashLifeRatio;
+                } else if (userData.isSmoke) {
+                    // 煙用の特別な処理
+                    particle.position.add(userData.velocity);
+                    
+                    // 煙は膨張する
+                    const smokeGrowth = 1 + (userData.age / userData.lifespan) * 0.5;
+                    particle.scale.set(smokeGrowth, smokeGrowth, smokeGrowth);
+                    
+                    // 透明度の減少
+                    particle.material.opacity = Math.max(0, particle.material.opacity - 0.003);
+                } else {
+                    // 通常のパーティクル
+                    particle.position.add(userData.velocity);
+                    
+                    // 重力
+                    userData.velocity.y -= 0.02;
+                    
+                    // 寿命によるスケール縮小
+                    const lifeRatio = 1 - (userData.age / userData.lifespan);
+                    particle.scale.set(lifeRatio, lifeRatio, lifeRatio);
+                    
+                    // 色の変化（徐々に暗くなる）
+                    if (userData.age > userData.lifespan * 0.7) {
+                        particle.material.color.r = Math.max(0.3, particle.material.color.r - 0.01);
+                        particle.material.color.g = Math.max(0.1, particle.material.color.g - 0.01);
+                    }
+                }
+                
+                // 寿命が尽きたら削除
+                if (userData.age >= userData.lifespan) {
+                    scene.remove(particle);
+                    particles.splice(i, 1);
+                    i--;
+                }
+            }
+        }
+        
+        // アニメーションループ
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateEnemyShips();
+            updateCannonballs();
+            updateParticles();
+            
+            renderer.render(scene, camera);
+        }
+        
+        // 初期化して実行
+        init();
+    </script>
+</body>
+</html>

@@ -61,8 +61,8 @@
         }
         
         .category:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
         }
         
         .category h3 {
@@ -94,27 +94,32 @@
             transform: scaleX(1);
         }
         
+        .game-description {
+            min-height: a5px;
+            margin: 10px 0;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        
         .game-link {
             display: inline-block;
-            padding: 12px 25px;
+            padding: 10px 20px;
             background: linear-gradient(135deg, #7579e7, #b28df0);
             color: white;
             text-decoration: none;
             border-radius: 25px;
             font-weight: bold;
-            font-size: 1.2em;
+            font-size: 1.1em;
             transition: all 0.3s ease;
-            border: 2px solid transparent;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            border: none;
             margin-top: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
         
         .game-link:hover {
-            background: linear-gradient(135deg, #b28df0, #7579e7);
-            transform: scale(1.05) translateY(-3px);
-            box-shadow: 0 7px 15px rgba(117, 121, 231, 0.4);
+            background: linear-gradient(135deg, #8590ff, #a17fe0);
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px rgba(117, 121, 231, 0.4);
         }
         
         footer {
@@ -126,51 +131,9 @@
         }
 
         .category-icon {
-            font-size: 3em;
+            font-size: 2.5em;
             margin-bottom: 15px;
             color: #f8f9fa;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
-        }
-        
-        /* 扉が開くアニメーション */
-        @keyframes doorOpen {
-            0% { transform: rotateY(0deg); opacity: 0.3; }
-            100% { transform: rotateY(70deg); opacity: 1; }
-        }
-        
-        @keyframes float {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
-            100% { transform: translateY(0px); }
-        }
-        
-        .category:hover .category-icon {
-            animation: float 2s ease infinite;
-        }
-        
-        .door-effect {
-            perspective: 1000px;
-        }
-        
-        .category {
-            transform-origin: left;
-            transform-style: preserve-3d;
-            transition: transform 0.6s ease;
-        }
-        
-        .category:hover {
-            animation: doorOpen 0.6s forwards;
-        }
-        
-        /* 光るボタン効果 */
-        @keyframes glow {
-            0% { box-shadow: 0 0 5px rgba(117, 121, 231, 0.5); }
-            50% { box-shadow: 0 0 20px rgba(117, 121, 231, 0.8); }
-            100% { box-shadow: 0 0 5px rgba(117, 121, 231, 0.5); }
-        }
-        
-        .glow {
-            animation: glow 2s infinite;
         }
     </style>
 </head>
@@ -181,59 +144,112 @@
             <div class="subtitle">〜 ミニゲーム王国への入り口 〜</div>
         </header>
         
-        <div class="game-categories door-effect">
-            <div class="category">
-                <div class="category-icon">🎯</div>
-                <h3>シューティングゲーム</h3>
-                <a href="./shooting/index.html" class="game-link glow">プレイする</a>
-            </div>
-            
-            <div class="category">
-                <div class="category-icon">🔫</div>
-                <h3>シューティングAR</h3>
-                <a href="./shooting/index2.html" class="game-link glow">プレイする</a>
-            </div>
-            
-            <div class="category">
-                <div class="category-icon">👨‍👩‍👧‍👦</div>
-                <h3>ポピュレーション</h3>
-                <a href="./popul/index.html" class="game-link glow">プレイする</a>
-            </div>
-            
-            <div class="category">
-                <div class="category-icon">👽</div>
-                <h3>エイリアン</h3>
-                <a href="./et/index.html" class="game-link glow">プレイする</a>
-            </div>
-            
-            <div class="category">
-                <div class="category-icon">🐛</div>
-                <h3>ムカデ</h3>
-                <a href="./centi/index.html" class="game-link glow">プレイする</a>
-            </div>
-            
-            <div class="category">
-                <div class="category-icon">🕵️</div>
-                <h3>探偵ゲーム</h3>
-                <a href="./detective/index.html" class="game-link glow">プレイする</a>
-            </div>
-            
-            <div class="category">
-                <div class="category-icon">🏰</div>
-                <h3>お城</h3>
-                <a href="./castle/index.html" class="game-link glow">プレイする</a>
-            </div>
-            
-            <div class="category">
-                <div class="category-icon">🧪</div>
-                <h3>テスト</h3>
-                <a href="./test.html" class="game-link glow">テスト</a>
-            </div>
+        <div id="game-categories" class="game-categories">
+            <!-- ゲームカテゴリがここに動的に挿入されます -->
         </div>
         
         <footer>
             © 2025 ゲームワールド冒険の扉 | さあ、あなたの冒険が始まる！
         </footer>
     </div>
+
+    <script>
+        // ゲーム情報を配列で定義
+        // 新しいゲームを追加する場合は、この配列に要素を追加するだけでOK
+        const games = [
+            {
+                name: "シューティングゲーム",
+                description: "ベーシックなシューティングデス",
+                icon: "🎯",
+                url: "./shooting/index.html",
+                buttonText: "プレイする"
+            },
+            {
+                name: "シューティングAR ",
+                description: "シューティングゲームをARに変えたものです",
+                icon: "🔫",
+                url: "./shooting/index2.html",
+                buttonText: "プレイする"
+            },
+            {
+                name: "道路を渡る",
+                description: "渋滞した道路を、プレイヤーが横断するゲームです",
+                icon: "🔫",
+                url: "./loadpass/index.html",
+                buttonText: "プレイする"
+            },
+            {
+                name: "巨大モンスターとの戦い",
+                description: "巨大なモンスターに剣を振って、戦うゲームです",
+                icon: "🔫",
+                url: "./monster/index.html",
+                buttonText: "プレイする"
+            },
+            {
+                name: "ロボットxUFO",
+                description: "空飛ぶロボットがミサイルを発射してUFOを撃退します",
+                icon: "🔫",
+                url: "./robot/index.html",
+                buttonText: "プレイする"
+            },
+            {
+                name: "ポピュレーション",
+                description: "地面を調整して、人の住みやすい場所にするゲーム",
+                icon: "👨‍👩‍👧‍👦",
+                url: "./popul/index.html",
+                buttonText: "プレイする"
+            },
+            {
+                name: "エイリアン",
+                description: "エイリアンが素材を集めて、宇宙に帰るゲーム",
+                icon: "👽",
+                url: "./et/index.html",
+                buttonText: "プレイする"
+            },
+            {
+                name: "ムカデ",
+                description: "ムカデをシューティングする基本的なゲームです",
+                icon: "🐛",
+                url: "./centi/index.html",
+                buttonText: "プレイする"
+            },
+            {
+                name: "探偵ゲーム",
+                description: "謎を解き明かして事件を解決しよう",
+                icon: "🕵️",
+                url: "./detective/index.html",
+                buttonText: "プレイする"
+            },
+            {
+                name: "AR侍ガード",
+                description: "城を守り、敵の攻撃から王国を守ろう",
+                icon: "🏰",
+                url: "./castle/index.html",
+                buttonText: "プレイする"
+            }
+        ];
+
+        // ゲームカテゴリをHTMLに動的に追加する関数
+        function renderGames() {
+            const container = document.getElementById('game-categories');
+            
+            games.forEach(game => {
+                const gameElement = document.createElement('div');
+                gameElement.className = 'category';
+                
+                gameElement.innerHTML = `
+                    <div class="category-icon">${game.icon}</div>
+                    <h3>${game.name}</h3>
+                    <div class="game-description">${game.description}</div>
+                    <a href="${game.url}" class="game-link">${game.buttonText}</a>
+                `;
+                
+                container.appendChild(gameElement);
+            });
+        }
+
+        // ページ読み込み時にゲームを表示
+        window.onload = renderGames;
+    </script>
 </body>
 </html>
