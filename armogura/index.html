@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マーカーレス AR モグラたたきゲーム</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            display: block;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+        }
+        #score {
+            position: absolute;
+            top: 50px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            display: block;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        #timer {
+            position: absolute;
+            top: 80px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            display: block;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        #startButton {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            z-index: 200;
+        }
+        #finalScore {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+        #restartButton {
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        #placeGameButton {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 100;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">マーカーレスARモグラたたきゲーム: 平面を検出してゲームを設置し、モグラをタップしてください！</div>
+    <div id="score">スコア: 0</div>
+    <div id="timer">時間: 30秒</div>
+    <button id="startButton">AR開始</button>
+    <button id="placeGameButton">ゲームを設置</button>
+    
+    <div id="gameOver">
+        <h2>ゲームオーバー</h2>
+        <div id="finalScore">最終スコア: 0</div>
+        <button id="restartButton">もう一度プレイ</button>
+    </div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ゲーム状態
+        let score = 0;
+        let timeLeft = 30;
+        let gameActive = false;
+        let gameTimer;
+        let moles = [];
+        let scene, camera, renderer;
+        let xrSession = null;
+        let hitTestSource = null;
+        let localSpace = null;
+        let gameBoard = null;
+        let gameReticle = null;
+        let gamePlaced = false;
+
+        // DOM要素
+        const scoreElement = document.getElementById('score');
+        const timerElement = document.getElementById('timer');
+        const startButton = document.getElementById('startButton');
+        const placeGameButton = document.getElementById('placeGameButton');
+        const gameOverElement = document.getElementById('gameOver');
+        const finalScoreElement = document.getElementById('finalScore');
+        const restartButton = document.getElementById('restartButton');
+
+        // イベントリスナー
+        startButton.addEventListener('click', startAR);
+        placeGameButton.addEventListener('click', placeGame);
+        restartButton.addEventListener('click', restartGame);
+
+        // 初期化
+        init();
+
+        function init() {
+            // シーンの作成
+            scene = new THREE.Scene();
+
+            // カメラの設定
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+            // レンダラーの設定
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                alpha: true
+            });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // 照明の追加
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(1, 1, 1).normalize();
+            scene.add(light);
+
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            scene.add(ambientLight);
+
+            // WebXRのサポートチェック
+            if ('xr' in navigator) {
+                navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+                    if (supported) {
+                        startButton.disabled = false;
+                    } else {
+                        alert('WebXR AR はこのデバイスでサポートされていません。');
+                        startButton.disabled = true;
+                    }
+                });
+            } else {
+                alert('WebXR はこのブラウザでサポートされていません。');
+                startButton.disabled = true;
+            }
+
+            // リサイズイベント
+            window.addEventListener('resize', onWindowResize, false);
+
+            // レティクル（ターゲットマーカー）の作成
+            createReticle();
+
+            // アニメーションループ
+            renderer.setAnimationLoop(render);
+        }
+
+        function createReticle() {
+            const geometry = new THREE.RingGeometry(0.03, 0.04, 32).rotateX(-Math.PI / 2);
+            const material = new THREE.MeshBasicMaterial();
+            gameReticle = new THREE.Mesh(geometry, material);
+            gameReticle.matrixAutoUpdate = false;
+            gameReticle.visible = false;
+            scene.add(gameReticle);
+        }
+
+        function startAR() {
+            if (!renderer.xr.isPresenting) {
+                navigator.xr.requestSession('immersive-ar', {
+                    requiredFeatures: ['hit-test', 'local-floor']
+                }).then(onSessionStarted);
+            }
+        }
+
+        function onSessionStarted(session) {
+            xrSession = session;
+            session.addEventListener('end', onSessionEnded);
+
+            // タップイベントを処理
+            session.addEventListener('select', onSelect);
+
+            renderer.xr.setSession(session);
+            
+            // ヒットテストソースの初期化
+            session.requestReferenceSpace('viewer').then((space) => {
+                session.requestHitTestSource({ space: space }).then((source) => {
+                    hitTestSource = source;
+                });
+            });
+
+            session.requestReferenceSpace('local').then((space) => {
+                localSpace = space;
+                // レンダリングループは自動的に開始されます
+            });
+
+            // UI更新
+            startButton.style.display = 'none';
+            placeGameButton.style.display = 'block';
+        }
+
+        function onSessionEnded() {
+            xrSession = null;
+            hitTestSource = null;
+            
+            // ゲームをリセット
+            if (gameActive) {
+                endGame();
+            }
+            
+            // UI更新
+            startButton.style.display = 'block';
+            placeGameButton.style.display = 'none';
+            
+            if (gameBoard) {
+                scene.remove(gameBoard);
+                gameBoard = null;
+                moles = [];
+                gamePlaced = false;
+            }
+        }
+
+        function onSelect(event) {
+            if (!gameActive || !gamePlaced) return;
+
+            // タップ位置からのレイキャスト
+            const frame = event.frame;
+            const inputSource = event.inputSource;
+            
+            if (inputSource.targetRayMode === 'screen') {
+                // モバイルデバイスの画面タップ
+                const referenceSpace = renderer.xr.getReferenceSpace();
+                const pose = frame.getPose(inputSource.targetRaySpace, referenceSpace);
+                
+                if (pose) {
+                    const direction = new THREE.Vector3();
+                    const rayMatrix = new THREE.Matrix4();
+                    rayMatrix.fromArray(pose.transform.matrix);
+                    
+                    direction.set(0, 0, -1);
+                    direction.applyMatrix4(rayMatrix);
+                    
+                    const raycaster = new THREE.Raycaster();
+                    const origin = new THREE.Vector3();
+                    origin.setFromMatrixPosition(rayMatrix);
+                    
+                    raycaster.set(origin, direction);
+                    
+                    // モグラとの交差判定
+                    const intersects = raycaster.intersectObjects(moles);
+                    if (intersects.length > 0) {
+                        const mole = intersects[0].object;
+                        if (mole.userData.active) {
+                            // モグラをたたいた
+                            score += 10;
+                            scoreElement.textContent = 'スコア: ' + score;
+                            
+                            // モグラを穴に戻す
+                            mole.userData.active = false;
+                            mole.userData.timeUp = 0;
+                            
+                            // たたいたエフェクト
+                            mole.material.color.set(0xff0000); // 一瞬赤くする
+                            setTimeout(() => {
+                                mole.material.color.set(0x8B4513); // 元の色に戻す
+                            }, 200);
+                        }
+                    }
+                }
+            }
+        }
+
+        function placeGame() {
+            if (gameBoard || !gameReticle.visible) return;
+            
+            // ゲームボードを作成して現在のレティクル位置に配置
+            gameBoard = new THREE.Group();
+            scene.add(gameBoard);
+            
+            // レティクルの位置と回転をゲームボードに適用
+            gameBoard.position.setFromMatrixPosition(gameReticle.matrix);
+            
+            // 地面に対して垂直に配置
+            const normal = new THREE.Vector3(0, 1, 0);
+            const position = new THREE.Vector3();
+            position.setFromMatrixPosition(gameReticle.matrix);
+            
+            gameBoard.lookAt(position.x + normal.x, position.y + normal.y, position.z + normal.z);
+            gameBoard.rotateX(-Math.PI / 2); // 水平に配置するための回転
+            
+            // ゲームボードの表示
+            createGameBoard();
+            
+            // UIの更新
+            placeGameButton.textContent = 'ゲーム開始';
+            placeGameButton.onclick = startGame;
+            
+            gamePlaced = true;
+        }
+
+        function createGameBoard() {
+            // ゲームボードの基盤を作成
+            const boardGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.1);
+            const boardMaterial = new THREE.MeshLambertMaterial({
+                color: 0x8B4513 // 茶色
+            });
+            const board = new THREE.Mesh(boardGeometry, boardMaterial);
+            board.position.z = -0.05; // ボードを少し下に
+            gameBoard.add(board);
+
+            // モグラの穴を作成
+            const holePositions = [
+                [-0.15, -0.15, 0],
+                [0, -0.15, 0],
+                [0.15, -0.15, 0],
+                [-0.15, 0, 0],
+                [0, 0, 0],
+                [0.15, 0, 0],
+                [-0.15, 0.15, 0],
+                [0, 0.15, 0],
+                [0.15, 0.15, 0]
+            ];
+
+            holePositions.forEach(position => {
+                const holeGeometry = new THREE.CircleGeometry(0.04, 32);
+                const holeMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x000000,
+                    side: THREE.DoubleSide
+                });
+                const hole = new THREE.Mesh(holeGeometry, holeMaterial);
+                hole.position.set(position[0], position[1], position[2] + 0.01);
+                hole.rotateX(-Math.PI / 2);
+                gameBoard.add(hole);
+
+                // モグラのオブジェクトを作成
+                const moleGeometry = new THREE.SphereGeometry(0.035, 32, 32);
+                const moleMaterial = new THREE.MeshLambertMaterial({
+                    color: 0x8B4513
+                });
+                const mole = new THREE.Mesh(moleGeometry, moleMaterial);
+                mole.position.set(position[0], position[1], -0.05); // 初期位置は穴の下
+                mole.userData = {
+                    active: false,
+                    position: position,
+                    initialZ: -0.05,
+                    targetZ: 0.05, // 出てくる高さ
+                    speed: 0.005,
+                    timeUp: 0
+                };
+                gameBoard.add(mole);
+                moles.push(mole);
+            });
+        }
+
+        function startGame() {
+            if (gameActive) return;
+            
+            // ゲーム状態をリセット
+            score = 0;
+            timeLeft = 30;
+            scoreElement.textContent = 'スコア: 0';
+            timerElement.textContent = '時間: 30秒';
+            
+            // UIの更新
+            placeGameButton.style.display = 'none';
+            gameOverElement.style.display = 'none';
+            
+            // ゲーム開始
+            gameActive = true;
+            
+            // タイマーの開始
+            gameTimer = setInterval(() => {
+                timeLeft--;
+                timerElement.textContent = '時間: ' + timeLeft + '秒';
+                
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(gameTimer);
+            
+            // モグラを全て穴に戻す
+            moles.forEach(mole => {
+                mole.userData.active = false;
+                mole.position.z = mole.userData.initialZ;
+            });
+            
+            // UIの更新
+            finalScoreElement.textContent = '最終スコア: ' + score;
+            gameOverElement.style.display = 'block';
+        }
+
+        function restartGame() {
+            gameOverElement.style.display = 'none';
+            startGame();
+        }
+
+        function updateMoles() {
+            if (!gameActive || !gamePlaced) return;
+            
+            // ランダムにモグラを出現させる
+            if (Math.random() < 0.02) {
+                const inactiveMoles = moles.filter(mole => !mole.userData.active);
+                if (inactiveMoles.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * inactiveMoles.length);
+                    const mole = inactiveMoles[randomIndex];
+                    mole.userData.active = true;
+                    mole.userData.timeUp = Math.random() * 1 + 1; // 1〜2秒間出現
+                }
+            }
+            
+            // モグラの動きを更新
+            moles.forEach(mole => {
+                if (mole.userData.active) {
+                    // 出現中のモグラは上に移動
+                    if (mole.position.z < mole.userData.targetZ) {
+                        mole.position.z += mole.userData.speed;
+                    } else {
+                        // 最大高さに達したら時間をカウントダウン
+                        mole.userData.timeUp -= 0.016; // 約60FPSの場合の1フレーム時間
+                        if (mole.userData.timeUp <= 0) {
+                            mole.userData.active = false;
+                        }
+                    }
+                } else {
+                    // 非アクティブなモグラは下に移動
+                    if (mole.position.z > mole.userData.initialZ) {
+                        mole.position.z -= mole.userData.speed;
+                    }
+                }
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function render(timestamp, frame) {
+            if (frame) {
+                if (hitTestSource && !gamePlaced) {
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+                    
+                    if (hitTestResults.length > 0) {
+                        const hit = hitTestResults[0];
+                        const pose = hit.getPose(localSpace);
+                        
+                        if (pose) {
+                            gameReticle.visible = true;
+                            gameReticle.matrix.fromArray(pose.transform.matrix);
+                        }
+                    } else {
+                        gameReticle.visible = false;
+                    }
+                }
+                
+                updateMoles();
+            }
+            
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
