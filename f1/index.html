@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>F1 レースゲーム</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            touch-action: none;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 18px;
+            text-shadow: 1px 1px 2px black;
+            pointer-events: none;
+        }
+        #speedometer {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 18px;
+            pointer-events: none;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 24px;
+            user-select: none;
+            touch-action: none;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+        #startButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #e10600;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        #countdown {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 100px;
+            z-index: 100;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">スピード: <span id="speed">0</span> km/h</div>
+    <div id="speedometer">0</div>
+    <div id="controls">
+        <div id="leftBtn" class="control-btn">←</div>
+        <div id="rightBtn" class="control-btn">→</div>
+    </div>
+    <div id="startScreen">
+        <h1>F1 レースゲーム</h1>
+        <p>画面左右のボタンで操作します</p>
+        <p>タイルトコントロールにも対応</p>
+        <button id="startButton">スタート</button>
+    </div>
+    <div id="countdown">3</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ゲーム状態
+        let isGameStarted = false;
+        let carSpeed = 0;
+        const maxSpeed = 200; // 最高速度 (km/h)
+        const acceleration = 0.5; // 加速度
+        const friction = 0.1; // 摩擦
+        let score = 0;
+        let startTime = 0;
+        
+        // サウンド要素
+        let engineSound;
+        let crashSound;
+        let startSound;
+
+        // Three.js セットアップ
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x87CEEB); // 空色の背景
+        document.body.appendChild(renderer.domElement);
+
+        // 車のモデルを作成
+        const carGeometry = new THREE.BoxGeometry(1, 0.5, 2);
+        const carMaterial = new THREE.MeshLambertMaterial({ color: 0xe10600 }); // F1赤
+        const car = new THREE.Mesh(carGeometry, carMaterial);
+        car.position.y = 0.25;
+        scene.add(car);
+        
+        // ホイールを追加
+        const wheelGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 32);
+        const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        
+        const frontLeftWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+        frontLeftWheel.rotation.z = Math.PI / 2;
+        frontLeftWheel.position.set(-0.6, 0.3, -0.7);
+        car.add(frontLeftWheel);
+        
+        const frontRightWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+        frontRightWheel.rotation.z = Math.PI / 2;
+        frontRightWheel.position.set(0.6, 0.3, -0.7);
+        car.add(frontRightWheel);
+        
+        const rearLeftWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+        rearLeftWheel.rotation.z = Math.PI / 2;
+        rearLeftWheel.position.set(-0.6, 0.3, 0.7);
+        car.add(rearLeftWheel);
+        
+        const rearRightWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+        rearRightWheel.rotation.z = Math.PI / 2;
+        rearRightWheel.position.set(0.6, 0.3, 0.7);
+        car.add(rearRightWheel);
+        
+        // フロントウィングを追加
+        const wingGeometry = new THREE.BoxGeometry(1.4, 0.1, 0.2);
+        const wingMaterial = new THREE.MeshLambertMaterial({ color: 0xe10600 });
+        const frontWing = new THREE.Mesh(wingGeometry, wingMaterial);
+        frontWing.position.set(0, 0.25, -1);
+        car.add(frontWing);
+        
+        // リアウィングを追加
+        const rearWing = new THREE.Mesh(wingGeometry, wingMaterial);
+        rearWing.position.set(0, 0.5, 1);
+        car.add(rearWing);
+        
+        // ドライバーコックピットを追加
+        const cockpitGeometry = new THREE.BoxGeometry(0.6, 0.2, 0.8);
+        const cockpitMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
+        cockpit.position.set(0, 0.5, 0);
+        car.add(cockpit);
+
+        // 道路を作成（背景全体をカバー）
+        const roadWidth = 8;
+        const roadLength = 2000; // より長く
+        const roadGeometry = new THREE.PlaneGeometry(roadWidth, roadLength);
+        const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const road = new THREE.Mesh(roadGeometry, roadMaterial);
+        road.rotation.x = -Math.PI / 2;
+        road.position.z = -roadLength / 4; // 位置調整
+        scene.add(road);
+
+        // 複数の道路セグメントでつなぐ
+        const road2 = new THREE.Mesh(roadGeometry, roadMaterial);
+        road2.rotation.x = -Math.PI / 2;
+        road2.position.z = -roadLength / 4 - roadLength + 10; // 少し重なるように
+        scene.add(road2);
+        
+        // 側道を作成
+        const sideRoadGeometry = new THREE.PlaneGeometry(2, roadLength);
+        const sideRoadMaterial = new THREE.MeshLambertMaterial({ color: 0x999999 });
+        
+        const leftSideRoad = new THREE.Mesh(sideRoadGeometry, sideRoadMaterial);
+        leftSideRoad.rotation.x = -Math.PI / 2;
+        leftSideRoad.position.set(-5, 0, -roadLength / 4);
+        scene.add(leftSideRoad);
+
+        const leftSideRoad2 = new THREE.Mesh(sideRoadGeometry, sideRoadMaterial);
+        leftSideRoad2.rotation.x = -Math.PI / 2;
+        leftSideRoad2.position.set(-5, 0, -roadLength / 4 - roadLength + 10);
+        scene.add(leftSideRoad2);
+        
+        const rightSideRoad = new THREE.Mesh(sideRoadGeometry, sideRoadMaterial);
+        rightSideRoad.rotation.x = -Math.PI / 2;
+        rightSideRoad.position.set(5, 0, -roadLength / 4);
+        scene.add(rightSideRoad);
+
+        const rightSideRoad2 = new THREE.Mesh(sideRoadGeometry, sideRoadMaterial);
+        rightSideRoad2.rotation.x = -Math.PI / 2;
+        rightSideRoad2.position.set(5, 0, -roadLength / 4 - roadLength + 10);
+        scene.add(rightSideRoad2);
+        
+        // 中央線を追加
+        const lineGeometry = new THREE.PlaneGeometry(0.2, roadLength);
+        const lineMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFFFF });
+        const centerLine = new THREE.Mesh(lineGeometry, lineMaterial);
+        centerLine.rotation.x = -Math.PI / 2;
+        centerLine.position.y = 0.01; // 道路よりわずかに上
+        centerLine.position.z = -roadLength / 4;
+        scene.add(centerLine);
+
+        const centerLine2 = new THREE.Mesh(lineGeometry, lineMaterial);
+        centerLine2.rotation.x = -Math.PI / 2;
+        centerLine2.position.y = 0.01;
+        centerLine2.position.z = -roadLength / 4 - roadLength + 10;
+        scene.add(centerLine2);
+        
+        // 障害物（敵のF1カー）を作成
+        const obstacles = [];
+        
+        function createObstacle() {
+            // F1カーの本体を作成（敵車）
+            const enemyCarColor = Math.random() > 0.5 ? 0x0052cc : 0x008000; // 青またはグリーン
+            const enemyCarGeometry = new THREE.BoxGeometry(1, 0.5, 2);
+            const enemyCarMaterial = new THREE.MeshLambertMaterial({ color: enemyCarColor });
+            const enemyCar = new THREE.Mesh(enemyCarGeometry, enemyCarMaterial);
+            enemyCar.position.y = 0.25;
+            
+            // ホイールを追加
+            const wheelGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 16);
+            const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+            
+            const frontLeftWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            frontLeftWheel.rotation.z = Math.PI / 2;
+            frontLeftWheel.position.set(-0.6, 0.3, -0.7);
+            enemyCar.add(frontLeftWheel);
+            
+            const frontRightWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            frontRightWheel.rotation.z = Math.PI / 2;
+            frontRightWheel.position.set(0.6, 0.3, -0.7);
+            enemyCar.add(frontRightWheel);
+            
+            const rearLeftWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            rearLeftWheel.rotation.z = Math.PI / 2;
+            rearLeftWheel.position.set(-0.6, 0.3, 0.7);
+            enemyCar.add(rearLeftWheel);
+            
+            const rearRightWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            rearRightWheel.rotation.z = Math.PI / 2;
+            rearRightWheel.position.set(0.6, 0.3, 0.7);
+            enemyCar.add(rearRightWheel);
+            
+            // フロントウィングを追加
+            const wingGeometry = new THREE.BoxGeometry(1.4, 0.1, 0.2);
+            const wingMaterial = new THREE.MeshLambertMaterial({ color: enemyCarColor });
+            const frontWing = new THREE.Mesh(wingGeometry, wingMaterial);
+            frontWing.position.set(0, 0.25, -1);
+            enemyCar.add(frontWing);
+            
+            // リアウィングを追加
+            const rearWing = new THREE.Mesh(wingGeometry, wingMaterial);
+            rearWing.position.set(0, 0.5, 1);
+            enemyCar.add(rearWing);
+            
+            // ドライバーコックピットを追加
+            const cockpitGeometry = new THREE.BoxGeometry(0.6, 0.2, 0.8);
+            const cockpitMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+            const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
+            cockpit.position.set(0, 0.5, 0);
+            enemyCar.add(cockpit);
+            
+            // レーンを選択して配置
+            const lanePosition = Math.floor(Math.random() * 3) - 1; // -1, 0, 1
+            enemyCar.position.set(lanePosition * 2, 0.5, -100);
+            
+            scene.add(enemyCar);
+            obstacles.push(enemyCar);
+        }
+        
+        // 初期障害物を作成
+        for (let i = 0; i < 10; i++) {
+            setTimeout(() => {
+                if (isGameStarted) createObstacle();
+            }, i * 2000);
+        }
+
+        // ライトを追加
+        const ambientLight = new THREE.AmbientLight(0xFFFFFF, 0.5);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        scene.add(directionalLight);
+
+        // カメラ位置
+        camera.position.set(0, 3, 5);
+        camera.lookAt(car.position);
+
+        // コントロール
+        let leftPressed = false;
+        let rightPressed = false;
+        
+        // キーボードイベント
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') leftPressed = true;
+            if (e.key === 'ArrowRight') rightPressed = true;
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') leftPressed = false;
+            if (e.key === 'ArrowRight') rightPressed = false;
+        });
+        
+        // タッチコントロール
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+        
+        leftBtn.addEventListener('touchstart', () => { leftPressed = true; });
+        leftBtn.addEventListener('touchend', () => { leftPressed = false; });
+        rightBtn.addEventListener('touchstart', () => { rightPressed = true; });
+        rightBtn.addEventListener('touchend', () => { rightPressed = false; });
+        
+        // デバイスオリエンテーションコントロール
+        window.addEventListener('deviceorientation', (e) => {
+            if (isGameStarted && e.gamma !== null) {
+                const tilt = Math.max(-30, Math.min(30, e.gamma)); // -30〜30の範囲に制限
+                if (tilt < -5) leftPressed = true;
+                else if (tilt > 5) rightPressed = true;
+                else {
+                    leftPressed = false;
+                    rightPressed = false;
+                }
+            }
+        });
+
+        // サウンド初期化
+        function initSounds() {
+            engineSound = new Audio();
+            engineSound.src = "data:audio/mp3;base64,SUQzAwAAAABDRlRSRAAAAGQAAABUUEUxAAAAEQAAAGVuZ2luZVNvdW5kLm1wMwBUQUxCAAAAEQAAAGVuZ2luZVNvdW5kLm1wMwBUUEUyAAAAEQAAAGVuZ2luZVNvdW5kLm1wMwBUQ09OAAAAEQAAAAV1bmtub3duAA==";
+            engineSound.loop = true;
+            
+            crashSound = new Audio();
+            crashSound.src = "data:audio/mp3;base64,SUQzAwAAAABDRlRSRAAAAGQAAABUUEUxAAAAEQAAAGNyYXNoU291bmQubXAzAFRBTEIAAAARAAAAY3Jhc2hTb3VuZC5tcDMAVFBFMgAAABEAAABjcmFzaFNvdW5kLm1wMwBUQ09OAAAAEQAAAAVjcmFzaAA=";
+            
+            startSound = new Audio();
+            startSound.src = "data:audio/mp3;base64,SUQzAwAAAABDRlRSRAAAAGQAAABUUEUxAAAAEQAAAHN0YXJ0U291bmQubXAzAFRBTEIAAAARAAAAc3RhcnRTb3VuZC5tcDMAVFBFMgAAABEAAABzdGFydFNvdW5kLm1wMwBUQ09OAAAAEQAAAAV1bmtub3duAA==";
+        }
+
+        // 当たり判定
+        function checkCollision() {
+            const carBoundingBox = new THREE.Box3().setFromObject(car);
+            
+            for (let i = 0; i < obstacles.length; i++) {
+                const obstacleBoundingBox = new THREE.Box3().setFromObject(obstacles[i]);
+                
+                if (carBoundingBox.intersectsBox(obstacleBoundingBox)) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // ゲームオーバー
+        function gameOver() {
+            if (crashSound) crashSound.play();
+            if (engineSound) engineSound.pause();
+            carSpeed = 0;
+            isGameStarted = false;
+            
+            // 5秒後にリスタート
+            setTimeout(() => {
+                location.reload();
+            }, 3000);
+        }
+
+        // スタートボタン
+        document.getElementById('startButton').addEventListener('click', () => {
+            const startScreen = document.getElementById('startScreen');
+            startScreen.style.display = 'none';
+            
+            const countdown = document.getElementById('countdown');
+            countdown.style.display = 'flex';
+            
+            // カウントダウン
+            let count = 3;
+            countdown.textContent = count;
+            
+            const countInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdown.textContent = count;
+                } else if (count === 0) {
+                    countdown.textContent = 'GO!';
+                    if (startSound) startSound.play();
+                } else {
+                    clearInterval(countInterval);
+                    countdown.style.display = 'none';
+                    isGameStarted = true;
+                    startTime = Date.now();
+                    if (engineSound) engineSound.play();
+                    
+                    // 定期的に障害物を生成
+                    setInterval(() => {
+                        if (isGameStarted) createObstacle();
+                    }, 2000);
+                }
+            }, 1000);
+            
+            // サウンド初期化
+            initSounds();
+        });
+
+        // アニメーションループ
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (isGameStarted) {
+                // 車の加速
+                carSpeed += acceleration;
+                if (carSpeed > maxSpeed) carSpeed = maxSpeed;
+                
+                // 摩擦による減速
+                carSpeed -= friction;
+                if (carSpeed < 0) carSpeed = 0;
+                
+                // スピード表示を更新
+                document.getElementById('speed').textContent = Math.floor(carSpeed);
+                document.getElementById('speedometer').textContent = Math.floor(carSpeed);
+                
+                // エンジン音の調整
+                if (engineSound) {
+                    engineSound.playbackRate = 0.5 + carSpeed/maxSpeed;
+                    engineSound.volume = 0.3 + carSpeed/maxSpeed * 0.7;
+                }
+                
+                // 車の操作
+                if (leftPressed && car.position.x > -3) {
+                    car.position.x -= 0.1;
+                    car.rotation.y = 0.1;
+                } else if (rightPressed && car.position.x < 3) {
+                    car.position.x += 0.1;
+                    car.rotation.y = -0.1;
+                } else {
+                    car.rotation.y = 0;
+                }
+                
+                // 障害物の移動
+                for (let i = 0; i < obstacles.length; i++) {
+                    obstacles[i].position.z += carSpeed / 20;
+                    
+                    // 画面外に出た障害物を削除
+                    if (obstacles[i].position.z > 10) {
+                        scene.remove(obstacles[i]);
+                        obstacles.splice(i, 1);
+                        i--;
+                        score++;
+                    }
+                }
+                
+                // 当たり判定
+                if (checkCollision()) {
+                    gameOver();
+                }
+                
+                // 道路と中央線のスクロール効果
+                road.position.z += carSpeed / 20;
+                road2.position.z += carSpeed / 20;
+                
+                // 道路リセット
+                if (road.position.z > roadLength / 2) {
+                    road.position.z = road2.position.z - roadLength + 10;
+                }
+                if (road2.position.z > roadLength / 2) {
+                    road2.position.z = road.position.z - roadLength + 10;
+                }
+                
+                // 側道と中央線も同期
+                leftSideRoad.position.z = road.position.z;
+                rightSideRoad.position.z = road.position.z;
+                centerLine.position.z = road.position.z;
+                
+                leftSideRoad2.position.z = road2.position.z;
+                rightSideRoad2.position.z = road2.position.z;
+                centerLine2.position.z = road2.position.z;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // ウィンドウリサイズ対応
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>

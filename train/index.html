@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>電車運転シミュレーター</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            touch-action: none; /* スマホでのスクロールを防止 */
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+            font-size: 14px;
+            max-width: 80%;
+        }
+        #toggle-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+            font-size: 16px;
+            border: none;
+            cursor: pointer;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+            display: flex;
+            justify-content: space-around;
+            gap: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        #controls button {
+            padding: 15px 0;
+            font-size: 18px;
+            cursor: pointer;
+            flex-grow: 1;
+            border-radius: 10px;
+            border: none;
+            margin: 0 5px;
+            background-color: #444;
+            color: white;
+            -webkit-tap-highlight-color: transparent; /* タップ時のハイライトを消す */
+            user-select: none; /* テキスト選択を防止 */
+        }
+        #controls button:active {
+            background-color: #666;
+        }
+        #view-controls {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            z-index: 90;
+        }
+        .view-button {
+            background: rgba(0,0,0,0.5);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 25px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            margin: 0 10px;
+            border: none;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        #speedometer {
+            position: absolute;
+            right: 20px;
+            bottom: 90px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 20px;
+            z-index: 100;
+        }
+        /* レスポンシブ対応 */
+        @media (max-width: 600px) {
+            #info {
+                font-size: 12px;
+                padding: 8px;
+            }
+            #controls button {
+                padding: 12px 0;
+                font-size: 16px;
+            }
+            #speedometer {
+                font-size: 16px;
+                right: 10px;
+                bottom: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>電車運転シミュレーター</h2>
+        <p>操作方法:</p>
+        <ul>
+            <li>加速: 下部の「加速」ボタンまたは画面右半分タップ</li>
+            <li>減速/ブレーキ: 下部の「ブレーキ」ボタンまたは画面左半分タップ</li>
+            <li>左右視点変更: 左右のボタンまたは左右スワイプ</li>
+            <li>ホーンを鳴らす: ホーンボタン</li>
+        </ul>
+    </div>
+    
+    <button id="toggle-info">?</button>
+    
+    <div id="view-controls">
+        <button class="view-button" id="view-left">←</button>
+        <button class="view-button" id="view-right">→</button>
+    </div>
+    
+    <div id="controls">
+        <button id="brake">ブレーキ</button>
+        <button id="horn">ホーン</button>
+        <button id="accelerate">加速</button>
+    </div>
+    
+    <div id="speedometer">速度: 0 km/h</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // メイン変数
+        let scene, camera, renderer, train, tracks, terrain;
+        let speed = 0;
+        let maxSpeed = 120;
+        let acceleration = 0.2;
+        let braking = 0.4;
+        let deceleration = 0.05;
+        let trackLength = 10000;
+        let cameraOffset = new THREE.Vector3(0, 5, -15);
+        let isAccelerating = false;
+        let isBraking = false;
+        let trainPosition = 0;
+        let hornSound = null;
+
+        // キー押下状態
+        const keyState = {};
+
+        // 初期化
+        function init() {
+            // シーンの作成
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // 空色の背景
+            scene.fog = new THREE.Fog(0x87CEEB, 50, 800); // 霧を追加して遠方をフェードアウト
+
+            // カメラの作成
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, -15);
+            camera.lookAt(0, 0, 0);
+
+            // レンダラーの作成
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // 光源の追加
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(100, 100, 100);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            // 地形の作成
+            createTerrain();
+
+            // 線路の作成
+            createTracks();
+
+            // 電車の作成
+            createTrain();
+
+            // 情報パネルの表示/非表示切り替え
+            const infoPanel = document.getElementById('info');
+            const toggleInfoButton = document.getElementById('toggle-info');
+            
+            toggleInfoButton.addEventListener('click', () => {
+                if (infoPanel.style.display === 'none') {
+                    infoPanel.style.display = 'block';
+                } else {
+                    infoPanel.style.display = 'none';
+                }
+            });
+            
+            // ボタン操作のイベントリスナー（マウスとタッチ対応）
+            const accelerateButton = document.getElementById('accelerate');
+            const brakeButton = document.getElementById('brake');
+            const hornButton = document.getElementById('horn');
+            const viewLeftButton = document.getElementById('view-left');
+            const viewRightButton = document.getElementById('view-right');
+            
+            // 加速ボタン
+            ['mousedown', 'touchstart'].forEach(eventType => {
+                accelerateButton.addEventListener(eventType, (e) => {
+                    e.preventDefault(); // タッチイベントのデフォルト動作を防止
+                    isAccelerating = true;
+                });
+            });
+            
+            ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(eventType => {
+                accelerateButton.addEventListener(eventType, (e) => {
+                    e.preventDefault();
+                    isAccelerating = false;
+                });
+            });
+            
+            // ブレーキボタン
+            ['mousedown', 'touchstart'].forEach(eventType => {
+                brakeButton.addEventListener(eventType, (e) => {
+                    e.preventDefault();
+                    isBraking = true;
+                });
+            });
+            
+            ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(eventType => {
+                brakeButton.addEventListener(eventType, (e) => {
+                    e.preventDefault();
+                    isBraking = false;
+                });
+            });
+            
+            // ホーンボタン
+            ['click', 'touchstart'].forEach(eventType => {
+                hornButton.addEventListener(eventType, (e) => {
+                    e.preventDefault();
+                    playHorn();
+                });
+            });
+            
+            // 視点変更ボタン
+            ['mousedown', 'touchstart'].forEach(eventType => {
+                viewLeftButton.addEventListener(eventType, (e) => {
+                    e.preventDefault();
+                    cameraOffset.x = Math.max(cameraOffset.x - 3, -10);
+                });
+                
+                viewRightButton.addEventListener(eventType, (e) => {
+                    e.preventDefault();
+                    cameraOffset.x = Math.min(cameraOffset.x + 3, 10);
+                });
+            });
+            
+            // 画面タップエリアでの操作（左半分でブレーキ、右半分で加速）
+            let touchArea = null;
+            
+            renderer.domElement.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const screenWidth = window.innerWidth;
+                
+                // 下部のコントロールエリア付近のタッチを無視
+                if (touch.clientY > window.innerHeight - 100) return;
+                
+                if (touch.clientX < screenWidth / 2) {
+                    // 左半分
+                    isBraking = true;
+                    touchArea = 'left';
+                } else {
+                    // 右半分
+                    isAccelerating = true;
+                    touchArea = 'right';
+                }
+            });
+            
+            renderer.domElement.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                if (touchArea === 'left') {
+                    isBraking = false;
+                } else if (touchArea === 'right') {
+                    isAccelerating = false;
+                }
+                touchArea = null;
+            });
+            
+            // スワイプで視点変更
+            let touchStartX = 0;
+            let touchStartY = 0;
+            
+            renderer.domElement.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
+            });
+            
+            renderer.domElement.addEventListener('touchmove', (e) => {
+                if (e.touches.length > 0) {
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - touchStartX;
+                    
+                    // 左右のスワイプで視点変更 (X軸方向の移動が大きい場合のみ)
+                    if (Math.abs(deltaX) > 10) {
+                        const moveAmount = deltaX * 0.05;
+                        cameraOffset.x = Math.max(Math.min(cameraOffset.x - moveAmount, 10), -10);
+                        touchStartX = touch.clientX;
+                    }
+                }
+            });
+            
+            // キーボード操作のイベントリスナー（PCの場合）
+            window.addEventListener('keydown', (e) => {
+                keyState[e.key] = true;
+                
+                // ホーンのショートカット
+                if (e.key === 'h' || e.key === 'H') {
+                    playHorn();
+                }
+            });
+            
+            window.addEventListener('keyup', (e) => {
+                keyState[e.key] = false;
+            });
+
+            // リサイズ対応
+            window.addEventListener('resize', onWindowResize);
+
+            // アニメーションの開始
+            animate();
+        }
+
+        // 電車の作成
+        function createTrain() {
+            // 電車の本体グループ
+            train = new THREE.Group();
+            scene.add(train);
+            
+            // 電車の車体
+            const bodyGeometry = new THREE.BoxGeometry(5, 3, 15);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x3366cc });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 3;
+            body.castShadow = true;
+            body.receiveShadow = true;
+            train.add(body);
+            
+            // 窓の作成
+            const windowMaterial = new THREE.MeshPhongMaterial({ color: 0xaaddff, transparent: true, opacity: 0.7 });
+            
+            // 側面の窓
+            for (let i = -5; i <= 5; i += 2.5) {
+                const sideWindowGeometry = new THREE.BoxGeometry(0.1, 1.5, 1.5);
+                
+                // 左側の窓
+                const leftWindow = new THREE.Mesh(sideWindowGeometry, windowMaterial);
+                leftWindow.position.set(-2.55, 3, i);
+                train.add(leftWindow);
+                
+                // 右側の窓
+                const rightWindow = new THREE.Mesh(sideWindowGeometry, windowMaterial);
+                rightWindow.position.set(2.55, 3, i);
+                train.add(rightWindow);
+            }
+            
+            // フロントウィンドウ
+            const frontWindowGeometry = new THREE.BoxGeometry(4, 1.5, 0.1);
+            const frontWindow = new THREE.Mesh(frontWindowGeometry, windowMaterial);
+            frontWindow.position.set(0, 3.5, 7.55);
+            train.add(frontWindow);
+
+            // 運転台
+            const cabinGeometry = new THREE.BoxGeometry(4, 1, 1);
+            const cabinMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+            cabin.position.set(0, 2, 6.5);
+            train.add(cabin);
+            
+            // 車輪の作成
+            const wheelGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.5, 16);
+            const wheelMaterial = new THREE.MeshPhongMaterial({ color: 0x222222 });
+            
+            // 左側の車輪
+            for (let i = -5; i <= 5; i += 5) {
+                const leftWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                leftWheel.rotation.z = Math.PI / 2;
+                leftWheel.position.set(-2.5, 0.8, i);
+                leftWheel.castShadow = true;
+                train.add(leftWheel);
+            }
+            
+            // 右側の車輪
+            for (let i = -5; i <= 5; i += 5) {
+                const rightWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                rightWheel.rotation.z = Math.PI / 2;
+                rightWheel.position.set(2.5, 0.8, i);
+                rightWheel.castShadow = true;
+                train.add(rightWheel);
+            }
+            
+            // パンタグラフ（屋根の集電装置）
+            const pantographBase = new THREE.BoxGeometry(1, 0.2, 2);
+            const pantographMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
+            const pantograph = new THREE.Mesh(pantographBase, pantographMaterial);
+            pantograph.position.set(0, 4.6, 0);
+            train.add(pantograph);
+            
+            // パンタグラフの腕部分
+            const armGeometry = new THREE.BoxGeometry(0.2, 1, 0.2);
+            
+            // 前の腕
+            const frontArm1 = new THREE.Mesh(armGeometry, pantographMaterial);
+            frontArm1.position.set(-0.3, 5, 0.5);
+            train.add(frontArm1);
+            
+            const frontArm2 = new THREE.Mesh(armGeometry, pantographMaterial);
+            frontArm2.position.set(0.3, 5, 0.5);
+            train.add(frontArm2);
+            
+            // 後ろの腕
+            const backArm1 = new THREE.Mesh(armGeometry, pantographMaterial);
+            backArm1.position.set(-0.3, 5, -0.5);
+            train.add(backArm1);
+            
+            const backArm2 = new THREE.Mesh(armGeometry, pantographMaterial);
+            backArm2.position.set(0.3, 5, -0.5);
+            train.add(backArm2);
+            
+            // 上部の集電部
+            const collectorGeometry = new THREE.BoxGeometry(1.5, 0.1, 2);
+            const collector = new THREE.Mesh(collectorGeometry, pantographMaterial);
+            collector.position.set(0, 5.5, 0);
+            train.add(collector);
+
+            // 電車の初期位置
+            train.position.z = -trainPosition;
+        }
+
+        // 線路の作成
+        function createTracks() {
+            // 線路グループ
+            tracks = new THREE.Group();
+            scene.add(tracks);
+            
+            // レールのマテリアル
+            const railMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
+            
+            // 枕木のマテリアル
+            const sleepersGeometry = new THREE.BoxGeometry(3, 0.2, 1);
+            const sleepersMaterial = new THREE.MeshPhongMaterial({ color: 0x4d2600 });
+            
+            // 線路の作成（区間ごとに生成）
+            const segmentLength = 100;
+            const numSegments = trackLength / segmentLength;
+            
+            for (let segment = 0; segment < numSegments; segment++) {
+                const segmentGroup = new THREE.Group();
+                const startZ = segment * segmentLength;
+                
+                // 左右のレール
+                const railGeometry = new THREE.BoxGeometry(0.2, 0.2, segmentLength);
+                
+                const leftRail = new THREE.Mesh(railGeometry, railMaterial);
+                leftRail.position.set(-1.5, 0.2, startZ + segmentLength/2);
+                segmentGroup.add(leftRail);
+                
+                const rightRail = new THREE.Mesh(railGeometry, railMaterial);
+                rightRail.position.set(1.5, 0.2, startZ + segmentLength/2);
+                segmentGroup.add(rightRail);
+                
+                // 枕木
+                for (let i = 0; i < segmentLength; i += 2) {
+                    const sleeper = new THREE.Mesh(sleepersGeometry, sleepersMaterial);
+                    sleeper.position.set(0, 0, startZ + i);
+                    sleeper.receiveShadow = true;
+                    segmentGroup.add(sleeper);
+                }
+                
+                tracks.add(segmentGroup);
+            }
+        }
+
+        // 地形の作成
+        function createTerrain() {
+            terrain = new THREE.Group();
+            scene.add(terrain);
+            
+            // 地面の作成
+            const groundGeometry = new THREE.PlaneGeometry(1000, trackLength);
+            const groundMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x7cfc00,
+                side: THREE.DoubleSide
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.set(0, -0.1, trackLength/2);
+            ground.receiveShadow = true;
+            terrain.add(ground);
+            
+            // 山の作成
+            const mountainGeometry = new THREE.ConeGeometry(100, 200, 4);
+            const mountainMaterial = new THREE.MeshPhongMaterial({ color: 0x808080 });
+            
+            // 左側の山々
+            for (let i = 0; i < 10; i++) {
+                const mountain = new THREE.Mesh(mountainGeometry, mountainMaterial);
+                mountain.position.set(-200 - Math.random() * 300, 0, i * 1000 + Math.random() * 500);
+                mountain.scale.set(0.5 + Math.random(), 0.5 + Math.random(), 0.5 + Math.random());
+                mountain.rotation.y = Math.random() * Math.PI;
+                mountain.castShadow = true;
+                terrain.add(mountain);
+            }
+            
+            // 右側の山々
+            for (let i = 0; i < 10; i++) {
+                const mountain = new THREE.Mesh(mountainGeometry, mountainMaterial);
+                mountain.position.set(200 + Math.random() * 300, 0, i * 1000 + Math.random() * 500);
+                mountain.scale.set(0.5 + Math.random(), 0.5 + Math.random(), 0.5 + Math.random());
+                mountain.rotation.y = Math.random() * Math.PI;
+                mountain.castShadow = true;
+                terrain.add(mountain);
+            }
+            
+            // 木の作成
+            const treeTrunkGeometry = new THREE.CylinderGeometry(0.5, 0.8, 5, 8);
+            const treeTrunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+            const treeTopGeometry = new THREE.ConeGeometry(3, 7, 8);
+            const treeTopMaterial = new THREE.MeshPhongMaterial({ color: 0x228B22 });
+            
+            // 左側の木々
+            for (let i = 0; i < 100; i++) {
+                const treeGroup = new THREE.Group();
+                
+                const trunk = new THREE.Mesh(treeTrunkGeometry, treeTrunkMaterial);
+                trunk.position.y = 2.5;
+                trunk.castShadow = true;
+                treeGroup.add(trunk);
+                
+                const top = new THREE.Mesh(treeTopGeometry, treeTopMaterial);
+                top.position.y = 8.5;
+                top.castShadow = true;
+                treeGroup.add(top);
+                
+                treeGroup.position.set(-30 - Math.random() * 100, 0, Math.random() * trackLength);
+                terrain.add(treeGroup);
+            }
+            
+            // 右側の木々
+            for (let i = 0; i < 100; i++) {
+                const treeGroup = new THREE.Group();
+                
+                const trunk = new THREE.Mesh(treeTrunkGeometry, treeTrunkMaterial);
+                trunk.position.y = 2.5;
+                trunk.castShadow = true;
+                treeGroup.add(trunk);
+                
+                const top = new THREE.Mesh(treeTopGeometry, treeTopMaterial);
+                top.position.y = 8.5;
+                top.castShadow = true;
+                treeGroup.add(top);
+                
+                treeGroup.position.set(30 + Math.random() * 100, 0, Math.random() * trackLength);
+                terrain.add(treeGroup);
+            }
+            
+            // 駅の作成
+            for (let i = 1; i <= 3; i++) {
+                createStation(i * (trackLength / 4));
+            }
+        }
+
+        // 駅の作成
+        function createStation(position) {
+            const stationGroup = new THREE.Group();
+            
+            // プラットフォーム
+            const platformGeometry = new THREE.BoxGeometry(5, 1, 30);
+            const platformMaterial = new THREE.MeshPhongMaterial({ color: 0xcccccc });
+            
+            // 左プラットフォーム
+            const leftPlatform = new THREE.Mesh(platformGeometry, platformMaterial);
+            leftPlatform.position.set(-5, 0.5, position);
+            leftPlatform.receiveShadow = true;
+            stationGroup.add(leftPlatform);
+            
+            // 右プラットフォーム
+            const rightPlatform = new THREE.Mesh(platformGeometry, platformMaterial);
+            rightPlatform.position.set(5, 0.5, position);
+            rightPlatform.receiveShadow = true;
+            stationGroup.add(rightPlatform);
+            
+            // 駅の建物
+            const buildingGeometry = new THREE.BoxGeometry(4, 3, 10);
+            const buildingMaterial = new THREE.MeshPhongMaterial({ color: 0xf5deb3 });
+            
+            // 左の建物
+            const leftBuilding = new THREE.Mesh(buildingGeometry, buildingMaterial);
+            leftBuilding.position.set(-7, 2, position);
+            leftBuilding.castShadow = true;
+            leftBuilding.receiveShadow = true;
+            stationGroup.add(leftBuilding);
+            
+            // 右の建物
+            const rightBuilding = new THREE.Mesh(buildingGeometry, buildingMaterial);
+            rightBuilding.position.set(7, 2, position);
+            rightBuilding.castShadow = true;
+            rightBuilding.receiveShadow = true;
+            stationGroup.add(rightBuilding);
+            
+            // 屋根
+            const roofGeometry = new THREE.BoxGeometry(12, 0.5, 30);
+            const roofMaterial = new THREE.MeshPhongMaterial({ color: 0x996633 });
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.set(0, 5, position);
+            roof.castShadow = true;
+            stationGroup.add(roof);
+            
+            // 支柱
+            const pillarGeometry = new THREE.CylinderGeometry(0.2, 0.2, 4, 8);
+            const pillarMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
+            
+            for (let x = -5; x <= 5; x += 5) {
+                for (let z = -12; z <= 12; z += 6) {
+                    const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+                    pillar.position.set(x, 2.5, position + z);
+                    stationGroup.add(pillar);
+                }
+            }
+
+            // 駅名標識
+            const signGeometry = new THREE.BoxGeometry(3, 1, 0.1);
+            const signMaterial = new THREE.MeshPhongMaterial({ color: 0x0000ff });
+            
+            // 左の標識
+            const leftSign = new THREE.Mesh(signGeometry, signMaterial);
+            leftSign.position.set(-5, 3, position + 5);
+            stationGroup.add(leftSign);
+            
+            // 右の標識
+            const rightSign = new THREE.Mesh(signGeometry, signMaterial);
+            rightSign.position.set(5, 3, position + 5);
+            stationGroup.add(rightSign);
+            
+            terrain.add(stationGroup);
+        }
+
+        // ホーンを鳴らす関数
+        function playHorn() {
+            // AudioContextの作成（初回クリック時のみ）
+            if (!hornSound) {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // オシレーターの作成
+                hornSound = {
+                    context: audioContext,
+                    play: function() {
+                        const oscillator = this.context.createOscillator();
+                        const gainNode = this.context.createGain();
+                        
+                        // 音の設定
+                        oscillator.type = 'sine';
+                        oscillator.frequency.setValueAtTime(440, this.context.currentTime); // A音
+                        oscillator.frequency.setValueAtTime(349.23, this.context.currentTime + 0.2); // F音
+                        
+                        // 音量の設定
+                        gainNode.gain.setValueAtTime(0.3, this.context.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, this.context.currentTime + 0.5);
+                        
+                        // 接続
+                        oscillator.connect(gainNode);
+                        gainNode.connect(this.context.destination);
+                        
+                        // 再生
+                        oscillator.start();
+                        oscillator.stop(this.context.currentTime + 0.5);
+                    }
+                };
+            }
+            
+            hornSound.play();
+        }
+
+        // ウィンドウリサイズ時の処理
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // 電車の速度と位置を更新
+        function updateTrain() {
+            // キーボード操作の処理
+            if (keyState['ArrowUp'] || keyState['w'] || keyState['W']) {
+                isAccelerating = true;
+            } else {
+                isAccelerating = false;
+            }
+            
+            if (keyState['ArrowDown'] || keyState['s'] || keyState['S']) {
+                isBraking = true;
+            } else {
+                isBraking = false;
+            }
+            
+            // 加速
+            if (isAccelerating && speed < maxSpeed) {
+                speed += acceleration;
+            }
+            // ブレーキ
+            else if (isBraking && speed > 0) {
+                speed -= braking;
+            }
+            // 自然減速
+            else if (!isAccelerating && speed > 0) {
+                speed -= deceleration;
+            }
+            
+            // 速度の制限
+            speed = Math.max(0, Math.min(maxSpeed, speed));
+            
+            // 電車の位置更新
+            trainPosition += speed / 10;
+            
+            // 線路の終端に到達したら最初に戻る
+            if (trainPosition > trackLength) {
+                trainPosition = 0;
+            }
+            
+            train.position.z = -trainPosition;
+            
+            // 速度計の更新
+            document.getElementById('speedometer').textContent = `速度: ${Math.round(speed)} km/h`;
+        }
+        
+        // カメラの更新
+        function updateCamera() {
+            // 左右の視点変更
+            if (keyState['ArrowLeft'] || keyState['a'] || keyState['A']) {
+                cameraOffset.x = Math.max(cameraOffset.x - 0.1, -10);
+            }
+            if (keyState['ArrowRight'] || keyState['d'] || keyState['D']) {
+                cameraOffset.x = Math.min(cameraOffset.x + 0.1, 10);
+            }
+            
+            // カメラ位置の更新
+            camera.position.set(
+                train.position.x + cameraOffset.x,
+                train.position.y + cameraOffset.y,
+                train.position.z + cameraOffset.z
+            );
+            
+            // 電車の前方を見る
+            camera.lookAt(
+                train.position.x,
+                train.position.y + 2,
+                train.position.z + 10
+            );
+        }
+
+        // アニメーションループ
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateTrain();
+            updateCamera();
+            
+            renderer.render(scene, camera);
+        }
+
+        // 初期化を実行
+        init();
+    </script>
+</body>
+</html>

@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>3Dファイティングゲーム</title>
     <style>
         body { 
             margin: 0; 
             overflow: hidden; 
             font-family: Arial, sans-serif;
+            touch-action: none; /* Prevent browser handling of touch gestures */
         }
         #info {
             position: absolute;
@@ -18,6 +19,7 @@
             color: white;
             background-color: rgba(0,0,0,0.5);
             padding: 5px;
+            z-index: 10;
         }
         #controls {
             position: absolute;
@@ -27,12 +29,101 @@
             color: white;
             background-color: rgba(0,0,0,0.5);
             padding: 5px;
+            z-index: 10;
+        }
+        #healthBars {
+            position: absolute; 
+            top: 40px; 
+            width: 100%; 
+            display: flex; 
+            justify-content: center; 
+            gap: 20px;
+            z-index: 10;
+        }
+        #result {
+            position: absolute; 
+            top: 100px; 
+            width: 100%; 
+            text-align: center; 
+            color: white; 
+            font-size: 36px; 
+            font-weight: bold; 
+            display: none;
+            z-index: 20;
+        }
+        #restart {
+            position: absolute; 
+            bottom: 60px; 
+            width: 100%; 
+            text-align: center; 
+            display: none;
+            z-index: 20;
+        }
+        #restart button {
+            padding: 10px 20px; 
+            font-size: 16px; 
+            cursor: pointer;
+        }
+        
+        /* Mobile Controls */
+        #mobileControls {
+            position: absolute;
+            width: 100%;
+            bottom: 60px;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+        
+        #moveControls {
+            display: flex;
+            gap: 20px;
+        }
+        
+        #actionControls {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .controlBtn {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border: 2px solid white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* For smaller screens */
+        @media (max-width: 600px) {
+            .controlBtn {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+            
+            #mobileControls {
+                bottom: 40px;
+            }
+            
+            #moveControls, #actionControls {
+                gap: 10px;
+            }
         }
     </style>
 </head>
 <body>
     <div id="info">3Dファイティングゲーム</div>
-    <div id="healthBars" style="position: absolute; top: 40px; width: 100%; display: flex; justify-content: center; gap: 20px;">
+    <div id="healthBars">
         <div style="text-align: center; color: white;">
             <div>プレイヤー</div>
             <div style="width: 200px; height: 20px; background-color: #333; border: 2px solid white;">
@@ -46,22 +137,61 @@
             </div>
         </div>
     </div>
-    <div id="result" style="position: absolute; top: 100px; width: 100%; text-align: center; color: white; font-size: 36px; font-weight: bold; display: none;"></div>
-    <div id="controls" style="position: absolute; bottom: 10px; width: 100%; text-align: center; color: white; background-color: rgba(0,0,0,0.5); padding: 5px;">
+    <div id="result"></div>
+    <div id="controls">
         操作方法: A/D - 移動, W - ジャンプ, J - パンチ, K - キック<br>
+        <span id="mobileInstructions">モバイル: 画面下の矢印とボタンを使用</span><br>
         ※ステージから落ちると敗北！相手をステージ外に押し出そう！
     </div>
-    <div id="restart" style="position: absolute; bottom: 60px; width: 100%; text-align: center; display: none;">
+    <div id="restart">
         <button style="padding: 10px 20px; font-size: 16px; cursor: pointer;">リスタート</button>
+    </div>
+    
+    <!-- Mobile Controls -->
+    <div id="mobileControls">
+        <div id="moveControls">
+            <div id="btnLeft" class="controlBtn">←</div>
+            <div id="btnJump" class="controlBtn">↑</div>
+            <div id="btnRight" class="controlBtn">→</div>
+        </div>
+        <div id="actionControls">
+            <div id="btnPunch" class="controlBtn">P</div>
+            <div id="btnKick" class="controlBtn">K</div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
+        // モバイルチェック
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // モバイルデバイスなら画面の向きを確認
+        if (isMobile) {
+            // 横向きを推奨
+            if (window.orientation === 0 || window.orientation === 180) {
+                alert('このゲームは横向き（ランドスケープモード）でのプレイを推奨します。端末を回転させてください。');
+            }
+            
+            // 向きの変更を検知
+            window.addEventListener('orientationchange', function() {
+                if (window.orientation === 0 || window.orientation === 180) {
+                    alert('横向き（ランドスケープモード）でのプレイを推奨します。');
+                }
+            });
+        }
+        
         // ゲームの状態
         const gameState = {
             player: null,
             enemy: null,
             keys: {},
+            touchControls: {
+                left: false,
+                right: false,
+                jump: false,
+                punch: false,
+                kick: false
+            },
             actions: {
                 punch: false,
                 kick: false,
@@ -239,7 +369,7 @@
         gameState.player = createCharacter(0x0066cc, new THREE.Vector3(-3, 0, 0));
         gameState.enemy = createCharacter(0xcc0000, new THREE.Vector3(3, 0, 0));
         
-        // 入力ハンドラ
+        // キーボード入力ハンドラ
         window.addEventListener('keydown', (e) => {
             gameState.keys[e.key.toLowerCase()] = true;
         });
@@ -247,6 +377,75 @@
         window.addEventListener('keyup', (e) => {
             gameState.keys[e.key.toLowerCase()] = false;
         });
+        
+        // タッチコントロールの設定
+        function setupTouchControls() {
+            const btnLeft = document.getElementById('btnLeft');
+            const btnRight = document.getElementById('btnRight');
+            const btnJump = document.getElementById('btnJump');
+            const btnPunch = document.getElementById('btnPunch');
+            const btnKick = document.getElementById('btnKick');
+            
+            // 左ボタン
+            btnLeft.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                gameState.touchControls.left = true;
+            });
+            btnLeft.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                gameState.touchControls.left = false;
+            });
+            
+            // 右ボタン
+            btnRight.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                gameState.touchControls.right = true;
+            });
+            btnRight.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                gameState.touchControls.right = false;
+            });
+            
+            // ジャンプボタン
+            btnJump.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                gameState.touchControls.jump = true;
+            });
+            btnJump.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                gameState.touchControls.jump = false;
+            });
+            
+            // パンチボタン
+            btnPunch.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                gameState.touchControls.punch = true;
+            });
+            btnPunch.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                gameState.touchControls.punch = false;
+            });
+            
+            // キックボタン
+            btnKick.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                gameState.touchControls.kick = true;
+            });
+            btnKick.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                gameState.touchControls.kick = false;
+            });
+            
+            // マウス/タッチでのドラッグ操作も防止
+            document.addEventListener('touchmove', (e) => {
+                if (e.target.classList.contains('controlBtn')) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+        }
+        
+        // タッチコントロールの初期化
+        setupTouchControls();
         
         // パンチのアニメーション
         function animatePunch(character, side) {
@@ -376,7 +575,7 @@
             enemy.velocity.x *= 0.9;
         }
         
-        // プレイヤーの入力処理
+        // プレイヤーの入力処理（キーボードとタッチ対応）
         function handleInput(delta) {
             const player = gameState.player;
             
@@ -390,33 +589,39 @@
                 gameState.actions.cooldown -= delta;
             }
             
-            // 移動
-            if (gameState.keys['a'] && !player.animations.punch && !player.animations.kick) {
+            // 左右移動（キーボードかタッチ）
+            if ((gameState.keys['a'] || gameState.touchControls.left) && !player.animations.punch && !player.animations.kick) {
                 player.velocity.x = -3;
                 player.root.rotation.y = Math.PI / 2;
-            } else if (gameState.keys['d'] && !player.animations.punch && !player.animations.kick) {
+            } else if ((gameState.keys['d'] || gameState.touchControls.right) && !player.animations.punch && !player.animations.kick) {
                 player.velocity.x = 3;
                 player.root.rotation.y = -Math.PI / 2;
             } else {
                 player.velocity.x *= 0.9;
             }
             
-            // ジャンプ
-            if (gameState.keys['w'] && player.onGround && !player.animations.jump) {
+            // ジャンプ（キーボードかタッチ）
+            if ((gameState.keys['w'] || gameState.touchControls.jump) && player.onGround && !player.animations.jump) {
                 player.animations.jump = 0.01;
                 player.onGround = false;
+                // タッチジャンプはワンショットにする
+                gameState.touchControls.jump = false;
             }
             
-            // パンチ
-            if (gameState.keys['j'] && !player.animations.punch && !player.animations.kick && gameState.actions.cooldown <= 0) {
+            // パンチ（キーボードかタッチ）
+            if ((gameState.keys['j'] || gameState.touchControls.punch) && !player.animations.punch && !player.animations.kick && gameState.actions.cooldown <= 0) {
                 player.animations.punch = 0.01;
                 gameState.actions.cooldown = 0.5;
+                // タッチパンチはワンショットにする
+                gameState.touchControls.punch = false;
             }
             
-            // キック
-            if (gameState.keys['k'] && !player.animations.punch && !player.animations.kick && gameState.actions.cooldown <= 0) {
+            // キック（キーボードかタッチ）
+            if ((gameState.keys['k'] || gameState.touchControls.kick) && !player.animations.punch && !player.animations.kick && gameState.actions.cooldown <= 0) {
                 player.animations.kick = 0.01;
                 gameState.actions.cooldown = 0.5;
+                // タッチキックはワンショットにする
+                gameState.touchControls.kick = false;
             }
             
             // アニメーションの更新
@@ -794,6 +999,16 @@
         // キャラクターの初期配置を調整（ステージの中心に近づける）
         gameState.player.root.position.set(-2, 0, 0);
         gameState.enemy.root.position.set(2, 0, 0);
+        
+        // モバイル向けの調整
+        if (isMobile) {
+            // コントロールの表示
+            document.getElementById('mobileControls').style.display = 'flex';
+        } else {
+            // PCではモバイルコントロールを非表示
+            document.getElementById('mobileControls').style.display = 'none';
+            document.getElementById('mobileInstructions').style.display = 'none';
+        }
         
         // 初期化
         gameState.updateHealthUI();

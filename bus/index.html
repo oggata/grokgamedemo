@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>バス運転シミュレーター</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            touch-action: none;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            z-index: 100;
+        }
+        #speedometer {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        .control {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+        }
+        .control-row {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+        .control-button {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 10px;
+            user-select: none;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+        #start-button {
+            padding: 15px 30px;
+            font-size: 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        h1 {
+            color: white;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">矢印キーまたは画面右下のボタンでバスを操作します</div>
+    <div id="speedometer">速度: 0 km/h</div>
+    <div class="control">
+        <div class="control-row">
+            <div class="control-button" id="forward-button">↑</div>
+        </div>
+        <div class="control-row">
+            <div class="control-button" id="left-button">←</div>
+            <div class="control-button" id="backward-button">↓</div>
+            <div class="control-button" id="right-button">→</div>
+        </div>
+    </div>
+    <div id="start-screen">
+        <h1>バス運転シミュレーター</h1>
+        <button id="start-button">スタート</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ゲーム状態
+        let isGameStarted = false;
+        
+        // スタート画面の設定
+        const startScreen = document.getElementById('start-screen');
+        const startButton = document.getElementById('start-button');
+        
+        startButton.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            isGameStarted = true;
+        });
+
+        // Three.jsの設定
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // 空色の背景
+        
+        // カメラの設定
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, -5);
+        camera.lookAt(0, 0, 10);
+        
+        // レンダラーの設定
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        
+        // 光源の設定
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.camera.left = -50;
+        directionalLight.shadow.camera.right = 50;
+        directionalLight.shadow.camera.top = 50;
+        directionalLight.shadow.camera.bottom = -50;
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
+        scene.add(directionalLight);
+        
+        // 道路の作成
+        const roadGeometry = new THREE.PlaneGeometry(20, 500);
+        const roadMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x333333,
+            side: THREE.DoubleSide
+        });
+        const road = new THREE.Mesh(roadGeometry, roadMaterial);
+        road.rotation.x = -Math.PI / 2;
+        road.position.z = 250;
+        road.receiveShadow = true;
+        scene.add(road);
+        
+        // 道路の白線
+        const lineMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+        
+        for(let i = 0; i < 50; i++) {
+            const lineGeometry = new THREE.PlaneGeometry(0.3, 3);
+            const line = new THREE.Mesh(lineGeometry, lineMaterial);
+            line.rotation.x = -Math.PI / 2;
+            line.position.z = i * 10;
+            line.position.y = 0.01;
+            line.receiveShadow = true;
+            scene.add(line);
+        }
+        
+        // 地面の作成
+        const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
+        const groundMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x7CFC00,
+            side: THREE.DoubleSide
+        });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.1;
+        ground.receiveShadow = true;
+        scene.add(ground);
+        
+        // バスの作成
+        const busGroup = new THREE.Group();
+        
+        // バス本体
+        const busBodyGeometry = new THREE.BoxGeometry(2.5, 1.5, 6);
+        const busBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1E90FF });
+        const busBody = new THREE.Mesh(busBodyGeometry, busBodyMaterial);
+        busBody.position.y = 1.5;
+        busBody.castShadow = true;
+        busGroup.add(busBody);
+        
+        // バスの窓
+        const busWindowGeometry = new THREE.BoxGeometry(2.52, 0.7, 5.5);
+        const busWindowMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xADD8E6,
+            transparent: true,
+            opacity: 0.7
+        });
+        const busWindow = new THREE.Mesh(busWindowGeometry, busWindowMaterial);
+        busWindow.position.y = 2;
+        busGroup.add(busWindow);
+        
+        // バスのタイヤ作成関数
+        function createWheel(x, z) {
+            const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.3, 32);
+            const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+            const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel.rotation.z = Math.PI / 2;
+            wheel.position.set(x, 0.5, z);
+            wheel.castShadow = true;
+            return wheel;
+        }
+        
+        // 4つのタイヤを追加
+        busGroup.add(createWheel(1.2, 2));
+        busGroup.add(createWheel(-1.2, 2));
+        busGroup.add(createWheel(1.2, -2));
+        busGroup.add(createWheel(-1.2, -2));
+        
+        // バスをシーンに追加
+        busGroup.position.y = 0.2;
+        scene.add(busGroup);
+        
+        // 障害物の作成
+        const obstacles = [];
+        
+        for(let i = 0; i < 20; i++) {
+            // ランダムな位置に木を配置
+            const treeGeometry = new THREE.CylinderGeometry(0, 1.5, 4, 8);
+            const treeMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+            const tree = new THREE.Mesh(treeGeometry, treeMaterial);
+            
+            // 道路の左右にランダムに配置
+            const side = Math.random() > 0.5 ? 1 : -1;
+            tree.position.x = side * (Math.random() * 15 + 15);
+            tree.position.z = Math.random() * 200 + 20;
+            tree.position.y = 2;
+            tree.castShadow = true;
+            scene.add(tree);
+            
+            // 幹の追加
+            const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.3, 2, 8);
+            const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.set(tree.position.x, 0, tree.position.z);
+            trunk.castShadow = true;
+            scene.add(trunk);
+            
+            // ランダムに岩を配置
+            if(Math.random() > 0.7) {
+                const rockGeometry = new THREE.DodecahedronGeometry(1, 0);
+                const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+                const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+                rock.position.x = side * (Math.random() * 10 + 5);
+                rock.position.z = Math.random() * 200 + 20;
+                rock.position.y = 0.5;
+                rock.castShadow = true;
+                scene.add(rock);
+                
+                // 衝突判定のための障害物リストに追加
+                obstacles.push({
+                    mesh: rock,
+                    position: new THREE.Vector3(rock.position.x, rock.position.y, rock.position.z),
+                    radius: 1
+                });
+            }
+        }
+        
+        // 建物の作成
+        for(let i = 0; i < 10; i++) {
+            const buildingHeight = Math.random() * 5 + 5;
+            const buildingGeometry = new THREE.BoxGeometry(Math.random() * 4 + 3, buildingHeight, Math.random() * 4 + 3);
+            const buildingMaterial = new THREE.MeshStandardMaterial({ 
+                color: new THREE.Color(
+                    Math.random() * 0.1 + 0.4,
+                    Math.random() * 0.1 + 0.4,
+                    Math.random() * 0.1 + 0.4
+                )
+            });
+            const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+            
+            // 道路の左右にランダムに配置
+            const side = Math.random() > 0.5 ? 1 : -1;
+            building.position.x = side * (Math.random() * 20 + 25);
+            building.position.z = Math.random() * 200 + 20;
+            building.position.y = buildingHeight / 2;
+            building.castShadow = true;
+            scene.add(building);
+        }
+
+        // 他のバスや車を追加
+        const vehicles = [];
+        const vehicleColors = [0xFF0000, 0x00FF00, 0xFFFF00, 0xFFA500, 0xFF00FF];
+        
+        for(let i = 0; i < 5; i++) {
+            const vehicleGroup = new THREE.Group();
+            
+            // 車体
+            const vehicleLength = Math.random() * 3 + 3;
+            const vehicleGeometry = new THREE.BoxGeometry(2, 1.2, vehicleLength);
+            const vehicleMaterial = new THREE.MeshStandardMaterial({ 
+                color: vehicleColors[Math.floor(Math.random() * vehicleColors.length)]
+            });
+            const vehicleBody = new THREE.Mesh(vehicleGeometry, vehicleMaterial);
+            vehicleBody.position.y = 1;
+            vehicleBody.castShadow = true;
+            vehicleGroup.add(vehicleBody);
+            
+            // タイヤ
+            vehicleGroup.add(createWheel(1, vehicleLength/3));
+            vehicleGroup.add(createWheel(-1, vehicleLength/3));
+            vehicleGroup.add(createWheel(1, -vehicleLength/3));
+            vehicleGroup.add(createWheel(-1, -vehicleLength/3));
+            
+            // 位置設定
+            vehicleGroup.position.y = 0.2;
+            vehicleGroup.position.x = Math.random() > 0.5 ? -3 : 3; // 道路の左右
+            vehicleGroup.position.z = Math.random() * 200 + 50;
+            
+            // 進行方向をプレイヤーと反対にするため180度回転
+            if(vehicleGroup.position.x > 0) {
+                vehicleGroup.rotation.y = Math.PI;
+            }
+            
+            scene.add(vehicleGroup);
+            
+            // 衝突判定のための車両リストに追加
+            vehicles.push({
+                mesh: vehicleGroup,
+                speed: Math.random() * 0.2 + 0.1,
+                position: new THREE.Vector3(vehicleGroup.position.x, vehicleGroup.position.y, vehicleGroup.position.z),
+                length: vehicleLength,
+                width: 2
+            });
+        }
+        
+        // キー入力の状態
+        const keys = {
+            ArrowUp: false,
+            ArrowDown: false,
+            ArrowLeft: false,
+            ArrowRight: false
+        };
+        
+        // タッチコントロールのセットアップ
+        const forwardButton = document.getElementById('forward-button');
+        const backwardButton = document.getElementById('backward-button');
+        const leftButton = document.getElementById('left-button');
+        const rightButton = document.getElementById('right-button');
+        
+        // タッチイベントリスナー
+        forwardButton.addEventListener('touchstart', () => keys.ArrowUp = true);
+        forwardButton.addEventListener('touchend', () => keys.ArrowUp = false);
+        
+        backwardButton.addEventListener('touchstart', () => keys.ArrowDown = true);
+        backwardButton.addEventListener('touchend', () => keys.ArrowDown = false);
+        
+        leftButton.addEventListener('touchstart', () => keys.ArrowLeft = true);
+        leftButton.addEventListener('touchend', () => keys.ArrowLeft = false);
+        
+        rightButton.addEventListener('touchstart', () => keys.ArrowRight = true);
+        rightButton.addEventListener('touchend', () => keys.ArrowRight = false);
+        
+        // マウスイベントリスナー (PCとタブレット用)
+        forwardButton.addEventListener('mousedown', () => keys.ArrowUp = true);
+        forwardButton.addEventListener('mouseup', () => keys.ArrowUp = false);
+        forwardButton.addEventListener('mouseleave', () => keys.ArrowUp = false);
+        
+        backwardButton.addEventListener('mousedown', () => keys.ArrowDown = true);
+        backwardButton.addEventListener('mouseup', () => keys.ArrowDown = false);
+        backwardButton.addEventListener('mouseleave', () => keys.ArrowDown = false);
+        
+        leftButton.addEventListener('mousedown', () => keys.ArrowLeft = true);
+        leftButton.addEventListener('mouseup', () => keys.ArrowLeft = false);
+        leftButton.addEventListener('mouseleave', () => keys.ArrowLeft = false);
+        
+        rightButton.addEventListener('mousedown', () => keys.ArrowRight = true);
+        rightButton.addEventListener('mouseup', () => keys.ArrowRight = false);
+        rightButton.addEventListener('mouseleave', () => keys.ArrowRight = false);
+        
+        // キーボードイベントリスナー
+        window.addEventListener('keydown', (e) => {
+            if(keys.hasOwnProperty(e.code)) {
+                keys[e.code] = true;
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            if(keys.hasOwnProperty(e.code)) {
+                keys[e.code] = false;
+            }
+        });
+        
+        // リサイズイベントリスナー
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // バスの物理パラメータ
+        const bus = {
+            position: new THREE.Vector3(0, 0, 0),
+            speed: 0,
+            maxSpeed: 0.5,
+            acceleration: 0.005,
+            deceleration: 0.003,
+            steering: 0,
+            maxSteering: 0.03,
+            rotationSpeed: 0
+        };
+        
+        // スピードメーター要素
+        const speedometer = document.getElementById('speedometer');
+        
+        // 衝突判定関数
+        function checkCollision() {
+            // バスの境界ボックス (簡易的な実装)
+            const busWidth = 2.5;
+            const busLength = 6;
+            
+            // 道路からはみ出していないかチェック
+            if(Math.abs(bus.position.x) > 8) {
+                return true;
+            }
+            
+            // 障害物との衝突チェック
+            for(const obstacle of obstacles) {
+                const distance = bus.position.distanceTo(obstacle.position);
+                if(distance < (busWidth/2 + obstacle.radius)) {
+                    return true;
+                }
+            }
+            
+            // 他の車両との衝突チェック
+            for(const vehicle of vehicles) {
+                // バスと車両の距離
+                const dx = Math.abs(bus.position.x - vehicle.position.x);
+                const dz = Math.abs(bus.position.z - vehicle.position.z);
+                
+                // 簡易的な長方形同士の衝突判定
+                if(dx < (busWidth/2 + vehicle.width/2) && dz < (busLength/2 + vehicle.length/2)) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        // アニメーションループ
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if(!isGameStarted) {
+                renderer.render(scene, camera);
+                return;
+            }
+            
+            // バスの加速と減速
+            if(keys.ArrowUp) {
+                bus.speed += bus.acceleration;
+                if(bus.speed > bus.maxSpeed) {
+                    bus.speed = bus.maxSpeed;
+                }
+            } else if(keys.ArrowDown) {
+                bus.speed -= bus.acceleration;
+                if(bus.speed < -bus.maxSpeed / 2) {
+                    bus.speed = -bus.maxSpeed / 2;
+                }
+            } else {
+                // 自然減速
+                if(bus.speed > 0) {
+                    bus.speed -= bus.deceleration;
+                    if(bus.speed < 0) bus.speed = 0;
+                } else if(bus.speed < 0) {
+                    bus.speed += bus.deceleration;
+                    if(bus.speed > 0) bus.speed = 0;
+                }
+            }
+            
+            // ステアリング制御
+            if(keys.ArrowLeft) {
+                bus.steering = -bus.maxSteering;
+            } else if(keys.ArrowRight) {
+                bus.steering = bus.maxSteering;
+            } else {
+                bus.steering = 0;
+            }
+            
+            // バスの回転
+            if(bus.speed !== 0) {
+                bus.rotationSpeed = bus.steering * bus.speed;
+                busGroup.rotation.y += bus.rotationSpeed;
+            }
+            
+            // バスの移動
+            const direction = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), busGroup.rotation.y);
+            bus.position.add(direction.multiplyScalar(bus.speed));
+            
+            // バスの位置更新
+            busGroup.position.x = bus.position.x;
+            busGroup.position.z = bus.position.z;
+            
+            // カメラの追従
+            camera.position.x = bus.position.x;
+            camera.position.z = bus.position.z - 10;
+            camera.lookAt(bus.position.x, bus.position.y + 1, bus.position.z + 5);
+            
+            // 他の車両の移動
+            for(const vehicle of vehicles) {
+                if(vehicle.mesh.position.x > 0) {
+                    // 右側の車線は手前に移動
+                    vehicle.mesh.position.z -= vehicle.speed;
+                    if(vehicle.mesh.position.z < -10) {
+                        vehicle.mesh.position.z = 200;
+                    }
+                } else {
+                    // 左側の車線は奥に移動
+                    vehicle.mesh.position.z += vehicle.speed;
+                    if(vehicle.mesh.position.z > 200) {
+                        vehicle.mesh.position.z = -10;
+                    }
+                }
+                
+                // 衝突判定用の位置も更新
+                vehicle.position.copy(vehicle.mesh.position);
+            }
+            
+            // スピードメーターの更新
+            const speedKmh = Math.abs(bus.speed) * 100;
+            speedometer.textContent = `速度: ${speedKmh.toFixed(1)} km/h`;
+            
+            // 衝突判定
+            if(checkCollision()) {
+                bus.speed = 0;
+                speedometer.textContent = `衝突しました! 速度: 0 km/h`;
+                speedometer.style.color = 'red';
+                
+                // 3秒後にリセット
+                setTimeout(() => {
+                    bus.position.set(0, 0, 0);
+                    busGroup.position.set(0, 0.2, 0);
+                    busGroup.rotation.y = 0;
+                    speedometer.style.color = 'white';
+                }, 3000);
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+    </script>
+</body>
+</html>
