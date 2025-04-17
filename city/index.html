@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ランダム都市マップジェネレーター</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #222;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        button {
+            margin-top: 10px;
+            padding: 8px 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h1>Ground Modifiers</h1>
+        <p>ランダム生成された都市マップ</p>
+        <button id="regenerate">新しいマップを生成</button>
+    </div>
+    
+    <!-- 最新バージョンのThree.jsを使用 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- OrbitControlsは別途インポート (Three.jsの一部として) -->
+    <script>
+        // OrbitControlsの実装 (Three.jsに含まれなくなったため直接実装)
+        // https://github.com/mrdoob/three.js/blob/dev/examples/jsm/controls/OrbitControls.js を基に簡略化
+        THREE.OrbitControls = function(object, domElement) {
+            this.object = object;
+            this.domElement = (domElement !== undefined) ? domElement : document;
+            
+            // API
+            this.enabled = true;
+            this.center = new THREE.Vector3();
+            
+            this.enableDamping = false;
+            this.dampingFactor = 0.25;
+            
+            this.minDistance = 0;
+            this.maxDistance = Infinity;
+            
+            this.minPolarAngle = 0;
+            this.maxPolarAngle = Math.PI;
+            
+            // マウスボタン
+            this.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+            
+            // 内部状態
+            var scope = this;
+            
+            var EPS = 0.000001;
+            
+            var rotateStart = new THREE.Vector2();
+            var rotateEnd = new THREE.Vector2();
+            var rotateDelta = new THREE.Vector2();
+            
+            var panStart = new THREE.Vector2();
+            var panEnd = new THREE.Vector2();
+            var panDelta = new THREE.Vector2();
+            
+            var dollyStart = new THREE.Vector2();
+            var dollyEnd = new THREE.Vector2();
+            var dollyDelta = new THREE.Vector2();
+            
+            var STATE = { NONE: - 1, ROTATE: 0, DOLLY: 1, PAN: 2, TOUCH_ROTATE: 3, TOUCH_DOLLY: 4, TOUCH_PAN: 5 };
+            var state = STATE.NONE;
+            
+            // アニメーションループ中に更新する必要がある値
+            this.update = function() {
+                // カメラの位置を中心点を基準に更新
+                var position = scope.object.position;
+                
+                position.clampLength(scope.minDistance, scope.maxDistance);
+                
+                return false;
+            };
+            
+            function getAutoRotationAngle() {
+                return 2 * Math.PI / 60 / 60 * scope.autoRotateSpeed;
+            }
+            
+            function getZoomScale() {
+                return Math.pow(0.95, scope.zoomSpeed);
+            }
+            
+            function onMouseDown(event) {
+                event.preventDefault();
+                
+                if (scope.enabled === false) return;
+                
+                if (event.button === scope.mouseButtons.ROTATE) {
+                    state = STATE.ROTATE;
+                    rotateStart.set(event.clientX, event.clientY);
+                } else if (event.button === scope.mouseButtons.DOLLY) {
+                    state = STATE.DOLLY;
+                    dollyStart.set(event.clientX, event.clientY);
+                } else if (event.button === scope.mouseButtons.PAN) {
+                    state = STATE.PAN;
+                    panStart.set(event.clientX, event.clientY);
+                }
+                
+                document.addEventListener('mousemove', onMouseMove, false);
+                document.addEventListener('mouseup', onMouseUp, false);
+            }
+            
+            function onMouseMove(event) {
+                event.preventDefault();
+                
+                if (scope.enabled === false) return;
+                
+                if (state === STATE.ROTATE) {
+                    rotateEnd.set(event.clientX, event.clientY);
+                    rotateDelta.subVectors(rotateEnd, rotateStart);
+                    
+                    // 回転処理
+                    rotateLeft(2 * Math.PI * rotateDelta.x / scope.domElement.clientWidth);
+                    rotateUp(2 * Math.PI * rotateDelta.y / scope.domElement.clientHeight);
+                    
+                    rotateStart.copy(rotateEnd);
+                } else if (state === STATE.DOLLY) {
+                    dollyEnd.set(event.clientX, event.clientY);
+                    dollyDelta.subVectors(dollyEnd, dollyStart);
+                    
+                    if (dollyDelta.y > 0) {
+                        dollyOut(getZoomScale());
+                    } else if (dollyDelta.y < 0) {
+                        dollyIn(getZoomScale());
+                    }
+                    
+                    dollyStart.copy(dollyEnd);
+                } else if (state === STATE.PAN) {
+                    panEnd.set(event.clientX, event.clientY);
+                    panDelta.subVectors(panEnd, panStart);
+                    
+                    pan(panDelta.x, panDelta.y);
+                    
+                    panStart.copy(panEnd);
+                }
+            }
+            
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove, false);
+                document.removeEventListener('mouseup', onMouseUp, false);
+                
+                state = STATE.NONE;
+            }
+            
+            function onMouseWheel(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                if (event.deltaY < 0) {
+                    dollyIn(getZoomScale());
+                } else if (event.deltaY > 0) {
+                    dollyOut(getZoomScale());
+                }
+            }
+            
+            function onKeyDown(event) {
+                if (scope.enabled === false) return;
+                
+                switch (event.keyCode) {
+                    case 38: // up arrow
+                        dollyIn(getZoomScale());
+                        break;
+                    case 40: // down arrow
+                        dollyOut(getZoomScale());
+                        break;
+                }
+            }
+            
+            // イベントリスナー
+            scope.domElement.addEventListener('contextmenu', function(event) { event.preventDefault(); }, false);
+            scope.domElement.addEventListener('mousedown', onMouseDown, false);
+            scope.domElement.addEventListener('wheel', onMouseWheel, false);
+            scope.domElement.addEventListener('keydown', onKeyDown, false);
+            
+            // カメラ操作関数
+            function rotateLeft(angle) {
+                // Y軸周りの回転
+                var quaternion = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+                scope.object.position.sub(scope.center);
+                scope.object.position.applyQuaternion(quaternion);
+                scope.object.position.add(scope.center);
+                scope.object.lookAt(scope.center);
+            }
+            
+            function rotateUp(angle) {
+                // 水平軸周りの回転
+                var axis = new THREE.Vector3().crossVectors(scope.object.up, new THREE.Vector3().subVectors(scope.object.position, scope.center).normalize());
+                var quaternion = new THREE.Quaternion().setFromAxisAngle(axis, angle);
+                scope.object.position.sub(scope.center);
+                scope.object.position.applyQuaternion(quaternion);
+                scope.object.position.add(scope.center);
+                scope.object.lookAt(scope.center);
+            }
+            
+            function dollyIn(dollyScale) {
+                scale /= dollyScale;
+            }
+            
+            function dollyOut(dollyScale) {
+                scale *= dollyScale;
+            }
+            
+            function pan(deltaX, deltaY) {
+                var offset = new THREE.Vector3();
+                
+                var element = scope.domElement === document ? scope.domElement.body : scope.domElement;
+                
+                // パースペクティブ
+                var position = scope.object.position;
+                offset.copy(position).sub(scope.center);
+                var targetDistance = offset.length();
+                
+                // 視野角に基づいてパン速度を計算
+                targetDistance *= Math.tan((scope.object.fov / 2) * Math.PI / 180.0);
+                
+                // 左右に動かす
+                var movLeft = new THREE.Vector3();
+                movLeft.crossVectors(scope.object.up, offset).setLength(2 * deltaX * targetDistance / element.clientHeight);
+                
+                // 上下に動かす
+                var movUp = new THREE.Vector3();
+                movUp.copy(scope.object.up).setLength(2 * deltaY * targetDistance / element.clientHeight);
+                
+                scope.object.position.add(movUp).add(movLeft);
+                scope.center.add(movUp).add(movLeft);
+                
+                scope.object.lookAt(scope.center);
+            }
+            
+            var scale = 1;
+            
+            this.update();
+        };
+        
+        THREE.OrbitControls.prototype = Object.create(THREE.EventDispatcher.prototype);
+        THREE.OrbitControls.prototype.constructor = THREE.OrbitControls;
+    </script>
+    
+    <script>
+        // マップのパラメータ
+        const config = {
+            width: 50,            // マップの幅
+            height: 30,           // マップの高さ
+            minBlockSize: 1,      // ブロックの最小サイズ
+            maxBlockSize: 6,      // ブロックの最大サイズ
+            roadWidth: {
+                min: 0.2,         // 最小道路幅
+                max: 0.5,         // 最大道路幅
+                main: 0.8         // メイン道路幅
+            },
+            subdivisionChance: 0.6, // ブロックを分割する確率
+            maxSubdivisions: 4,   // 最大分割回数
+            buildingHeight: {
+                min: 0.5,         // 最小建物高さ
+                max: 8,           // 最大建物高さ
+                commercial: 6,    // 商業地区の建物高さ
+                residential: 3    // 住宅地区の建物高さ
+            },
+            parkChance: 0.2,      // 公園が生成される確率
+            treeSpacing: 2,       // 木の間隔
+            colors: {
+                road: 0x444444,       // 道路の色
+                block: 0x222222,      // ブロックの色
+                highlight: 0x8888ff,  // ハイライトの色
+                background: 0x111111, // 背景の色
+                park: 0x335533,       // 公園の色
+                tree: 0x228822        // 木の色
+            }
+        };
+
+        // シーンの初期化
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(config.colors.background);
+        
+        // カメラの設定
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 30, 20);
+        camera.lookAt(0, 0, 0);
+        
+        // レンダラーの設定
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        
+        // コントロールの設定
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.center.set(0, 0, 0);
+        
+        // 光源の設定
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(50, 100, 50);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.left = -50;
+        directionalLight.shadow.camera.right = 50;
+        directionalLight.shadow.camera.top = 50;
+        directionalLight.shadow.camera.bottom = -50;
+        scene.add(directionalLight);
+        
+        // BSPツリー風のブロック分割アルゴリズムでマップを生成する
+        class Block {
+            constructor(x, y, width, height, depth = 0.5) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.depth = depth;
+                this.subdivided = false;
+                this.children = [];
+            }
+            
+            subdivide() {
+                if (this.subdivided || 
+                    this.width <= config.minBlockSize || 
+                    this.height <= config.minBlockSize) {
+                    return false;
+                }
+                
+                // 分割回数の制限
+                if (Math.random() > Math.pow(config.subdivisionChance, this.getDepth())) {
+                    return false;
+                }
+                
+                // 水平または垂直に分割するかを決定
+                let horizontal = Math.random() < 0.5;
+                
+                // 現在のブロックのサイズに応じて分割方向を調整
+                if (this.width > this.height * 1.5) {
+                    horizontal = false; // 幅が高さより大きい場合は水平分割を優先
+                } else if (this.height > this.width * 1.5) {
+                    horizontal = true;  // 高さが幅より大きい場合は垂直分割を優先
+                }
+                
+                // 分割位置を決定（端から少し内側）
+                const minSplit = 0.3; // 最小分割比率
+                const maxSplit = 0.7; // 最大分割比率
+                const splitRatio = minSplit + Math.random() * (maxSplit - minSplit);
+                
+                // 実際の分割処理
+                if (horizontal) {
+                    // 水平分割
+                    const splitPoint = Math.floor(this.height * splitRatio);
+                    if (splitPoint < config.minBlockSize || 
+                        this.height - splitPoint < config.minBlockSize) {
+                        return false;
+                    }
+                    
+                    this.children.push(
+                        new Block(this.x, this.y, this.width, splitPoint, this.depth + 1),
+                        new Block(this.x, this.y + splitPoint, this.width, this.height - splitPoint, this.depth + 1)
+                    );
+                } else {
+                    // 垂直分割
+                    const splitPoint = Math.floor(this.width * splitRatio);
+                    if (splitPoint < config.minBlockSize || 
+                        this.width - splitPoint < config.minBlockSize) {
+                        return false;
+                    }
+                    
+                    this.children.push(
+                        new Block(this.x, this.y, splitPoint, this.height, this.depth + 1),
+                        new Block(this.x + splitPoint, this.y, this.width - splitPoint, this.height, this.depth + 1)
+                    );
+                }
+                
+                this.subdivided = true;
+                
+                // 再帰的に子ブロックも分割を試みる
+                for (const child of this.children) {
+                    child.subdivide();
+                }
+                
+                return true;
+            }
+            
+            getDepth() {
+                let depth = 0;
+                let current = this;
+                while (current.parent) {
+                    depth++;
+                    current = current.parent;
+                }
+                return depth;
+            }
+            
+            getLeafBlocks() {
+                if (!this.subdivided) {
+                    return [this];
+                }
+                
+                let leaves = [];
+                for (const child of this.children) {
+                    leaves = leaves.concat(child.getLeafBlocks());
+                }
+                return leaves;
+            }
+        }
+        
+        // マップ生成クラス
+        class CityMap {
+            constructor(config) {
+                this.config = config;
+                this.blocks = [];
+                this.meshes = new THREE.Group();
+                this.buildOutline = new THREE.Group();
+                this.roadNetwork = new THREE.Group();
+            }
+            
+            generate() {
+                // マップの中心を原点に合わせる
+                const offsetX = -this.config.width / 2;
+                const offsetY = -this.config.height / 2;
+                
+                // 最初の大きなブロックを作成
+                const rootBlock = new Block(offsetX, offsetY, this.config.width, this.config.height);
+                rootBlock.subdivide();
+                
+                // 一度すべての分割を行う
+                this.recursiveSubdivide(rootBlock, this.config.maxSubdivisions);
+                
+                // 分割済みのリーフブロックだけを保持
+                this.blocks = rootBlock.getLeafBlocks();
+                
+                // メッシュを生成
+                this.createMeshes();
+                
+                return this.meshes;
+            }
+            
+            recursiveSubdivide(block, maxDepth) {
+                if (maxDepth <= 0) return;
+                
+                let subdivided = false;
+                for (const child of block.children) {
+                    if (Math.random() < 0.7) { // 70%の確率で分割する
+                        subdivided = child.subdivide() || subdivided;
+                    }
+                }
+                
+                if (subdivided) {
+                    for (const child of block.children) {
+                        this.recursiveSubdivide(child, maxDepth - 1);
+                    }
+                }
+            }
+            
+            createMeshes() {
+                // 地面を作成
+                const groundGeometry = new THREE.PlaneGeometry(
+                    this.config.width * 1.5, 
+                    this.config.height * 1.5
+                );
+                const groundMaterial = new THREE.MeshStandardMaterial({
+                    color: config.colors.road,
+                    roughness: 0.8,
+                    metalness: 0.2,
+                });
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                this.meshes.add(ground);
+                
+                // 建物ブロックを作成
+                for (const block of this.blocks) {
+                    const blockSize = Math.min(block.width, block.height);
+                    
+                    // 公園かどうかを決定
+                    const isPark = Math.random() < this.config.parkChance;
+                    
+                    if (isPark) {
+                        // 公園を作成
+                        const parkHeight = 0.2;
+                        const parkGeometry = new THREE.BoxGeometry(
+                            block.width - config.roadWidth.main,
+                            parkHeight,
+                            block.height - config.roadWidth.main
+                        );
+                        const parkMaterial = new THREE.MeshStandardMaterial({
+                            color: config.colors.park,
+                            roughness: 0.8,
+                            metalness: 0.1,
+                        });
+                        const parkMesh = new THREE.Mesh(parkGeometry, parkMaterial);
+                        parkMesh.position.set(
+                            block.x + block.width / 2,
+                            parkHeight / 2,
+                            block.y + block.height / 2
+                        );
+                        parkMesh.receiveShadow = true;
+                        this.meshes.add(parkMesh);
+                        
+                        // 公園に木を追加
+                        this.addTrees(block, parkHeight);
+                        continue;
+                    }
+                    
+                    // 建物の高さを決定
+                    let height;
+                    if (blockSize > config.maxBlockSize * 0.7) {
+                        // 大きなブロック（商業地区）
+                        height = config.buildingHeight.commercial + Math.random() * 2;
+                    } else if (block.x % 2 === 0 && block.y % 2 === 0) {
+                        // 商業地区
+                        height = config.buildingHeight.commercial;
+                    } else if (blockSize < config.minBlockSize * 1.5) {
+                        // 住宅地区
+                        height = config.buildingHeight.residential;
+                    } else {
+                        // その他
+                        height = config.buildingHeight.min + Math.random() * (config.buildingHeight.max - config.buildingHeight.min);
+                    }
+                    
+                    // 建物の縁を少し内側にする（道路スペース）
+                    const roadOffset = config.roadWidth.main;
+                    const boxGeometry = new THREE.BoxGeometry(
+                        block.width - roadOffset,
+                        height,
+                        block.height - roadOffset
+                    );
+                    
+                    // 建物の色を決定
+                    let blockColor;
+                    if (blockSize > config.maxBlockSize * 0.7) {
+                        blockColor = new THREE.Color(0x555577);
+                    } else if (block.x % 2 === 0 && block.y % 2 === 0) {
+                        blockColor = new THREE.Color(0x775577);
+                    } else if (blockSize < config.minBlockSize * 1.5) {
+                        blockColor = new THREE.Color(0x775555);
+                    } else {
+                        blockColor = new THREE.Color(0x555555);
+                    }
+                    
+                    const boxMaterial = new THREE.MeshStandardMaterial({
+                        color: blockColor,
+                        roughness: 0.7,
+                        metalness: 0.3,
+                    });
+                    const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
+                    boxMesh.position.set(
+                        block.x + block.width / 2,
+                        height / 2,
+                        block.y + block.height / 2
+                    );
+                    boxMesh.castShadow = true;
+                    boxMesh.receiveShadow = true;
+                    this.meshes.add(boxMesh);
+                    
+                    // ブロックのアウトラインを作成
+                    const outlineGeometry = new THREE.EdgesGeometry(boxGeometry);
+                    const outlineMaterial = new THREE.LineBasicMaterial({
+                        color: 0x88CCFF,
+                        linewidth: 1
+                    });
+                    const outline = new THREE.LineSegments(outlineGeometry, outlineMaterial);
+                    outline.position.copy(boxMesh.position);
+                    this.buildOutline.add(outline);
+                }
+                
+                this.meshes.add(this.buildOutline);
+                
+                // 道路網を追加
+                this.createRoadNetwork();
+            }
+            
+            createRoadNetwork() {
+                // 水平道路と垂直道路のリストを作成
+                const horizontalRoads = new Set();
+                const verticalRoads = new Set();
+                
+                // すべてのブロックのエッジを道路として登録
+                for (const block of this.blocks) {
+                    // ブロックの4つの辺を追加
+                    horizontalRoads.add(block.y);
+                    horizontalRoads.add(block.y + block.height);
+                    verticalRoads.add(block.x);
+                    verticalRoads.add(block.x + block.width);
+                }
+                
+                // 道路の幅を決定する関数
+                const getRoadWidth = (isMainRoad) => {
+                    if (isMainRoad) {
+                        return config.roadWidth.main;
+                    }
+                    return config.roadWidth.min + Math.random() * (config.roadWidth.max - config.roadWidth.min);
+                };
+                
+                // メイン道路かどうかを判定する関数
+                const isMainRoad = (position, roads) => {
+                    const positions = Array.from(roads);
+                    const index = positions.indexOf(position);
+                    return index % 2 === 0 && index > 0 && index < positions.length - 1;
+                };
+                
+                // 水平道路の作成
+                for (const y of horizontalRoads) {
+                    const roadWidth = getRoadWidth(isMainRoad(y, horizontalRoads));
+                    const roadGeometry = new THREE.PlaneGeometry(this.config.width * 1.5, roadWidth * 0.8);
+                    const roadMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x6688FF,
+                        emissive: 0x1144AA,
+                        emissiveIntensity: 0.3,
+                        transparent: true,
+                        opacity: 0.8,
+                    });
+                    const road = new THREE.Mesh(roadGeometry, roadMaterial);
+                    road.position.set(0, 0.01, y);
+                    road.rotation.x = -Math.PI / 2;
+                    this.roadNetwork.add(road);
+                    
+                    // メイン道路の場合は木を追加
+                    if (isMainRoad(y, horizontalRoads)) {
+                        this.addRoadTrees(y, roadWidth, true);
+                    }
+                }
+                
+                // 垂直道路の作成
+                for (const x of verticalRoads) {
+                    const roadWidth = getRoadWidth(isMainRoad(x, verticalRoads));
+                    const roadGeometry = new THREE.PlaneGeometry(roadWidth * 0.8, this.config.height * 1.5);
+                    const roadMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x6688FF,
+                        emissive: 0x1144AA,
+                        emissiveIntensity: 0.3,
+                        transparent: true,
+                        opacity: 0.8,
+                    });
+                    const road = new THREE.Mesh(roadGeometry, roadMaterial);
+                    road.position.set(x, 0.01, 0);
+                    road.rotation.x = -Math.PI / 2;
+                    this.roadNetwork.add(road);
+                    
+                    // メイン道路の場合は木を追加
+                    if (isMainRoad(x, verticalRoads)) {
+                        this.addRoadTrees(x, roadWidth, false);
+                    }
+                }
+                
+                this.meshes.add(this.roadNetwork);
+            }
+            
+            // 道路沿いの木を追加するメソッド
+            addRoadTrees(position, roadWidth, isHorizontal) {
+                const treeSpacing = this.config.treeSpacing;
+                const treeHeight = 1.5;
+                const treeRadius = 0.3;
+                const offset = roadWidth / 2 + 0.5; // 道路の端から少し離す
+                
+                if (isHorizontal) {
+                    // 水平道路の両側に木を追加
+                    for (let x = -this.config.width / 2; x <= this.config.width / 2; x += treeSpacing) {
+                        // 道路の左側
+                        this.createTree(x, position - offset, treeHeight, treeRadius);
+                        // 道路の右側
+                        this.createTree(x, position + offset, treeHeight, treeRadius);
+                    }
+                } else {
+                    // 垂直道路の両側に木を追加
+                    for (let z = -this.config.height / 2; z <= this.config.height / 2; z += treeSpacing) {
+                        // 道路の左側
+                        this.createTree(position - offset, z, treeHeight, treeRadius);
+                        // 道路の右側
+                        this.createTree(position + offset, z, treeHeight, treeRadius);
+                    }
+                }
+            }
+            
+            // 1本の木を作成するメソッド
+            createTree(x, z, treeHeight, treeRadius) {
+                // 木の幹
+                const trunkGeometry = new THREE.CylinderGeometry(treeRadius * 0.2, treeRadius * 0.3, treeHeight * 0.3, 8);
+                const trunkMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.9,
+                    metalness: 0.1,
+                });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.set(x, treeHeight * 0.15, z);
+                trunk.castShadow = true;
+                this.meshes.add(trunk);
+                
+                // 木の葉
+                const leavesGeometry = new THREE.ConeGeometry(treeRadius, treeHeight * 0.7, 8);
+                const leavesMaterial = new THREE.MeshStandardMaterial({
+                    color: config.colors.tree,
+                    roughness: 0.8,
+                    metalness: 0.1,
+                });
+                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                leaves.position.set(x, treeHeight * 0.5, z);
+                leaves.castShadow = true;
+                this.meshes.add(leaves);
+            }
+            
+            // 木を追加するメソッド
+            addTrees(block, baseHeight) {
+                const treeSpacing = this.config.treeSpacing;
+                const treeHeight = 1.5;
+                const treeRadius = 0.3;
+                
+                for (let x = block.x + treeSpacing; x < block.x + block.width - treeSpacing; x += treeSpacing) {
+                    for (let z = block.y + treeSpacing; z < block.y + block.height - treeSpacing; z += treeSpacing) {
+                        // 木の幹
+                        const trunkGeometry = new THREE.CylinderGeometry(treeRadius * 0.2, treeRadius * 0.3, treeHeight * 0.3, 8);
+                        const trunkMaterial = new THREE.MeshStandardMaterial({
+                            color: 0x8B4513,
+                            roughness: 0.9,
+                            metalness: 0.1,
+                        });
+                        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                        trunk.position.set(x, baseHeight + treeHeight * 0.15, z);
+                        trunk.castShadow = true;
+                        this.meshes.add(trunk);
+                        
+                        // 木の葉
+                        const leavesGeometry = new THREE.ConeGeometry(treeRadius, treeHeight * 0.7, 8);
+                        const leavesMaterial = new THREE.MeshStandardMaterial({
+                            color: config.colors.tree,
+                            roughness: 0.8,
+                            metalness: 0.1,
+                        });
+                        const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                        leaves.position.set(x, baseHeight + treeHeight * 0.5, z);
+                        leaves.castShadow = true;
+                        this.meshes.add(leaves);
+                    }
+                }
+            }
+            
+            // マップのクリーンアップ
+            clear() {
+                scene.remove(this.meshes);
+                this.blocks = [];
+                this.meshes = new THREE.Group();
+                this.buildOutline = new THREE.Group();
+                this.roadNetwork = new THREE.Group();
+            }
+        }
+        
+        // マップの初期生成
+        let cityMap = new CityMap(config);
+        let mapMeshes = cityMap.generate();
+        scene.add(mapMeshes);
+        
+        // 再生成ボタンの処理
+        document.getElementById('regenerate').addEventListener('click', () => {
+            cityMap.clear();
+            cityMap = new CityMap(config);
+            mapMeshes = cityMap.generate();
+            scene.add(mapMeshes);
+        });
+        
+        // ウィンドウリサイズ対応
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // アニメーションループ
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+    </script>
+</body>
+</html>
