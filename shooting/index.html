@@ -134,19 +134,19 @@
         scene.add(directionalLight);
 
         // 地面の作成
-        const gridHelper = new THREE.GridHelper(100, 20, 0x0000ff, 0x808080);
+        const gridHelper = new THREE.GridHelper(200, 40, 0x0000ff, 0x808080);
         gridHelper.position.y = -10;
         scene.add(gridHelper);
 
         // ビル群を作成
         const buildings = [];
         const buildingColors = [0x555555, 0x666666, 0x777777, 0x888888, 0x999999];
-        const buildingCount = 50; // ビルの数
+        const buildingCount = 20; // ビルの数をさらに減らす
         
         function createBuilding(x, z) {
-            const width = 5 + Math.random() * 10;
+            const width = 3 + Math.random() * 5; // ビルの幅を狭くする
             const height = 10 + Math.random() * 40;
-            const depth = 5 + Math.random() * 10;
+            const depth = 3 + Math.random() * 5; // ビルの奥行きも狭くする
             
             const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
             const colorIndex = Math.floor(Math.random() * buildingColors.length);
@@ -157,6 +157,13 @@
             
             const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
             building.position.set(x, -10 + (height / 2), z);
+            
+            // ビルの衝突判定用のデータを追加
+            building.userData = {
+                width: width,
+                height: height,
+                depth: depth
+            };
             
             scene.add(building);
             buildings.push(building);
@@ -203,15 +210,16 @@
 
         // ゲーム変数
         let bullets = [];
+        let enemyBullets = []; // 敵の弾丸を管理する配列を追加
         let enemies = [];
         let powerups = [];
         let score = 0;
         let health = 100;
         let level = 1;
         let enemiesKilled = 0;
-        let lastShotTime = 0; // 連射制限用
-        let rapidFireMode = false; // 連射モード
-        let rapidFireEndTime = 0; // 連射モード終了時間
+        let lastShotTime = 0;
+        let rapidFireMode = false;
+        let rapidFireEndTime = 0;
         
         const scoreElement = document.getElementById('score');
         const healthElement = document.getElementById('health');
@@ -268,6 +276,19 @@
             bullets.push(bullet);
         }
 
+        // 敵の弾丸を作成する関数
+        function createEnemyBullet(enemy) {
+            const bulletGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+            const bulletMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xff0000
+            });
+            const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+            bullet.position.copy(enemy.position);
+            bullet.position.z += 1; // 敵の前方から発射
+            scene.add(bullet);
+            enemyBullets.push(bullet);
+        }
+
         // 敵の作成
         function createEnemy() {
             const enemyTypes = [
@@ -279,7 +300,9 @@
                     scale: 1,
                     health: 1,
                     speed: 1,
-                    points: 100
+                    points: 100,
+                    canShoot: true,
+                    shootInterval: 2000
                 },
                 { 
                     geometry: new THREE.SphereGeometry(0.8, 16, 16),
@@ -289,7 +312,9 @@
                     scale: 1.2,
                     health: 2,
                     speed: 1.5,
-                    points: 200
+                    points: 200,
+                    canShoot: true,
+                    shootInterval: 1500
                 },
                 { 
                     geometry: new THREE.ConeGeometry(0.8, 2, 8),
@@ -299,11 +324,12 @@
                     scale: 1.4,
                     health: 3,
                     speed: 0.7,
-                    points: 300
+                    points: 300,
+                    canShoot: true,
+                    shootInterval: 1000
                 }
             ];
             
-            // レベルに応じて敵の種類を選択（高レベルほど強い敵が出現）
             const typeIndex = Math.min(
                 Math.floor(Math.random() * (1 + Math.floor(level / 2))),
                 enemyTypes.length - 1
@@ -318,10 +344,26 @@
             const randomX = (Math.random() * spawnWidth) - (spawnWidth / 2);
             const randomY = (Math.random() * 15) - 7.5;
             
+            // 出現位置のパターンを追加
+            const spawnPattern = Math.floor(Math.random() * 3);
+            let spawnZ;
+            
+            switch(spawnPattern) {
+                case 0: // 前方から
+                    spawnZ = 10;
+                    break;
+                case 1: // 後方から
+                    spawnZ = -50;
+                    break;
+                case 2: // プレイヤーと同じ高さから
+                    spawnZ = -30;
+                    break;
+            }
+            
             enemy.position.set(
                 randomX,
                 randomY,
-                -50
+                spawnZ
             );
             
             // 敵の特性を保存
@@ -329,7 +371,11 @@
                 health: enemyType.health,
                 speed: enemyType.speed,
                 points: enemyType.points,
-                movePattern: Math.floor(Math.random() * 3) // ランダムな移動パターン
+                movePattern: Math.floor(Math.random() * 4), // 移動パターンを4種類に増やす
+                lastShotTime: 0,
+                shootInterval: enemyType.shootInterval,
+                canShoot: enemyType.canShoot,
+                spawnPattern: spawnPattern
             };
             
             scene.add(enemy);
@@ -431,48 +477,33 @@
 
         // 衝突判定
         function checkCollisions() {
-            // 弾丸と敵の衝突判定
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                for (let j = bullets.length - 1; j >= 0; j--) {
-                    if (j < 0 || j >= bullets.length || i < 0 || i >= enemies.length) continue;
+            // プレイヤーとビルの衝突判定
+            for (const building of buildings) {
+                const buildingBox = new THREE.Box3().setFromObject(building);
+                const playerBox = new THREE.Box3().setFromObject(player);
+                
+                if (buildingBox.intersectsBox(playerBox)) {
+                    health -= 5;
+                    healthElement.textContent = `Health: ${health}%`;
                     
-                    const distance = enemies[i].position.distanceTo(bullets[j].position);
-                    if (distance < 1) {
-                        // 弾丸を削除
-                        scene.remove(bullets[j]);
-                        bullets.splice(j, 1);
-                        
-                        // 敵のヘルスを減らす
-                        enemies[i].userData.health--;
-                        
-                        // ヘルスが0になったら敵を削除
-                        if (enemies[i].userData.health <= 0) {
-                            // スコア加算
-                            score += enemies[i].userData.points;
-                            scoreElement.textContent = `Score: ${score}`;
-                            
-                            // 爆発エフェクト
-                            createExplosion(enemies[i].position);
-                            
-                            // パワーアップドロップ
-                            if (Math.random() < powerupProbability) {
-                                createPowerup(enemies[i].position);
-                            }
-                            
-                            // 敵を削除
-                            scene.remove(enemies[i]);
-                            enemies.splice(i, 1);
-                            
-                            // 敵を倒した数を増やす
-                            enemiesKilled++;
-                            
-                            // レベルアップ判定
-                            if (enemiesKilled >= enemiesPerLevel) {
-                                levelUp();
-                            }
-                            
-                            break;
-                        }
+                    if (health <= 0) {
+                        gameOver();
+                    }
+                }
+            }
+
+            // プレイヤーと敵の弾丸の衝突判定
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                const distance = player.position.distanceTo(enemyBullets[i].position);
+                if (distance < 1) {
+                    health -= 10;
+                    healthElement.textContent = `Health: ${health}%`;
+                    
+                    scene.remove(enemyBullets[i]);
+                    enemyBullets.splice(i, 1);
+                    
+                    if (health <= 0) {
+                        gameOver();
                     }
                 }
             }
@@ -589,6 +620,11 @@
             }
             bullets = [];
             
+            for (const enemyBullet of enemyBullets) {
+                scene.remove(enemyBullet);
+            }
+            enemyBullets = [];
+            
             // ゲーム変数をリセット
             score = 0;
             health = 100;
@@ -665,7 +701,7 @@
                     createEnemy();
                 }
                 
-                // 敵の移動
+                // 敵の移動と攻撃
                 for (let i = enemies.length - 1; i >= 0; i--) {
                     const enemy = enemies[i];
                     const speed = basicEnemySpeed * enemy.userData.speed;
@@ -687,6 +723,23 @@
                                 enemy.position.x -= speed * 0.2;
                             }
                             break;
+                        case 3: // プレイヤーと同じ速度で移動
+                            enemy.position.z = player.position.z - 10;
+                            if (enemy.position.x < player.position.x) {
+                                enemy.position.x += speed * 0.2;
+                            } else {
+                                enemy.position.x -= speed * 0.2;
+                            }
+                            break;
+                    }
+                    
+                    // 敵の弾丸発射
+                    if (enemy.userData.canShoot) {
+                        const now = Date.now();
+                        if (now - enemy.userData.lastShotTime > enemy.userData.shootInterval) {
+                            createEnemyBullet(enemy);
+                            enemy.userData.lastShotTime = now;
+                        }
                     }
                     
                     // 回転エフェクト
@@ -700,19 +753,12 @@
                     }
                 }
                 
-                // パワーアップの移動
-                for (let i = powerups.length - 1; i >= 0; i--) {
-                    const powerup = powerups[i];
-                    powerup.position.z += 0.05;
-                    
-                    // 回転エフェクト
-                    powerup.rotation.x += powerup.userData.rotationSpeed;
-                    powerup.rotation.y += powerup.userData.rotationSpeed;
-                    
-                    // 画面外に出たら削除
-                    if (powerup.position.z > 10) {
-                        scene.remove(powerup);
-                        powerups.splice(i, 1);
+                // 敵の弾丸の移動
+                for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                    enemyBullets[i].position.z += bulletSpeed;
+                    if (enemyBullets[i].position.z > 10) {
+                        scene.remove(enemyBullets[i]);
+                        enemyBullets.splice(i, 1);
                     }
                 }
 
