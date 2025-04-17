@@ -2,11 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Battleship Game</title>
     <style>
-        body { margin: 0; overflow: hidden; }
-        canvas { display: block; }
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            touch-action: none; /* タッチ操作のデフォルト動作を無効化 */
+        }
+        canvas { 
+            display: block; 
+            touch-action: none; /* タッチ操作のデフォルト動作を無効化 */
+        }
         #info {
             position: absolute;
             top: 10px;
@@ -16,6 +23,7 @@
             font-family: Arial, sans-serif;
             font-size: 18px;
             text-shadow: 1px 1px 1px black;
+            pointer-events: none; /* タッチイベントを下の要素に透過 */
         }
         #score {
             position: absolute;
@@ -26,11 +34,17 @@
             font-family: Arial, sans-serif;
             font-size: 18px;
             text-shadow: 1px 1px 1px black;
+            pointer-events: none; /* タッチイベントを下の要素に透過 */
+        }
+        @media (max-width: 768px) {
+            #info, #score {
+                font-size: 16px; /* モバイル向けにフォントサイズを調整 */
+            }
         }
     </style>
 </head>
 <body>
-    <div id="info">クリックして砲弾を発射</div>
+    <div id="info">タップして砲弾を発射</div>
     <div id="score">スコア: 0</div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
@@ -82,6 +96,7 @@
             // イベントリスナー設定
             window.addEventListener('resize', onWindowResize, false);
             window.addEventListener('click', onMouseClick, false);
+            window.addEventListener('touchstart', onTouchStart, false);
             
             // マウス座標管理用の変数
             const mouse = new THREE.Vector2();
@@ -210,6 +225,35 @@
             
             if (intersects.length > 0) {
                 // クリックした海面の位置
+                const targetPosition = intersects[0].point;
+                
+                // その方向に砲弾を発射
+                shootCannonball(targetPosition);
+            } else {
+                // 海面と交差しない場合はデフォルトの方向に発射
+                shootCannonball();
+            }
+        }
+        
+        // タッチイベント処理
+        function onTouchStart(event) {
+            event.preventDefault(); // デフォルトのタッチ動作を防止
+            
+            // タッチ位置を取得
+            const touch = event.touches[0];
+            
+            // マウス位置をノーマライズド座標に変換 (-1 から +1 の範囲)
+            mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+            
+            // レイキャスターを更新
+            raycaster.setFromCamera(mouse, camera);
+            
+            // 海面との交点を計算
+            const intersects = raycaster.intersectObject(waterMesh);
+            
+            if (intersects.length > 0) {
+                // タップした海面の位置
                 const targetPosition = intersects[0].point;
                 
                 // その方向に砲弾を発射
@@ -367,6 +411,15 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // モバイルデバイスの場合、カメラ位置を調整
+            if (window.innerWidth < window.innerHeight) {
+                camera.position.set(0, 80, 250);
+                camera.lookAt(0, 0, -150);
+            } else {
+                camera.position.set(0, 100, 300);
+                camera.lookAt(0, 0, -200);
+            }
         }
         
         // 敵の戦艦を更新
