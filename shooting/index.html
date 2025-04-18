@@ -210,7 +210,7 @@
 
         // ゲーム変数
         let bullets = [];
-        let enemyBullets = []; // 敵の弾丸を管理する配列を追加
+        let enemyBullets = [];
         let enemies = [];
         let powerups = [];
         let score = 0;
@@ -220,6 +220,14 @@
         let lastShotTime = 0;
         let rapidFireMode = false;
         let rapidFireEndTime = 0;
+        let playerSpeed = 0.3; // プレイヤーの現在のスピード
+        let maxSpeed = 0.8; // 最大スピード
+        let minSpeed = 0.1; // 最小スピード
+        let acceleration = 0.01; // アクセル時の加速
+        let deceleration = 0.015; // ブレーキ時の減速
+        let courseOffset = 0; // コースのオフセット
+        let courseAmplitude = 20; // コースの振幅
+        let courseFrequency = 0.001; // コースの周波数
         
         const scoreElement = document.getElementById('score');
         const healthElement = document.getElementById('health');
@@ -237,7 +245,6 @@
         const shotInterval = 300; // ミリ秒
         const powerupProbability = 0.1;
         const enemiesPerLevel = 15;
-        const scenerySpeed = 0.3; // 景色の移動速度
 
         // キー入力の管理
         const keys = {};
@@ -561,7 +568,7 @@
                 
                 // 画面後方に移動したら前方に配置しなおす
                 if (buildings[i].position.z > 50) {
-                    buildings[i].position.x = (Math.random() * 200) - 100;
+                    buildings[i].position.x = (Math.random() * 200) - 100 + courseX;
                     buildings[i].position.z = -180;
                 }
             }
@@ -650,26 +657,38 @@
             requestAnimationFrame(animate);
             
             if (currentState === GAME_STATE.PLAYING) {
-                // 自機の移動
+                // スピードコントロール
                 if (keys['ArrowUp'] || keys['KeyW']) {
-                    player.position.y = Math.min(player.position.y + moveSpeed, playerMoveLimitY);
+                    playerSpeed = Math.min(playerSpeed + acceleration, maxSpeed);
                 }
                 if (keys['ArrowDown'] || keys['KeyS']) {
-                    player.position.y = Math.max(player.position.y - moveSpeed, -playerMoveLimitY);
+                    playerSpeed = Math.max(playerSpeed - deceleration, minSpeed);
                 }
+
+                // コースの更新
+                courseOffset += playerSpeed;
+                const courseX = Math.sin(courseOffset * courseFrequency) * courseAmplitude;
+                
+                // プレイヤーの位置をコースに沿って更新
                 if (keys['ArrowLeft'] || keys['KeyA']) {
-                    player.position.x = Math.max(player.position.x - moveSpeed, -playerMoveLimitX);
-                    player.rotation.z = Math.min(player.rotation.z + 0.05, 0.3); // 傾き効果
+                    player.position.x = Math.max(player.position.x - moveSpeed, -playerMoveLimitX + courseX);
+                    player.rotation.z = Math.min(player.rotation.z + 0.05, 0.3);
                 }
                 if (keys['ArrowRight'] || keys['KeyD']) {
-                    player.position.x = Math.min(player.position.x + moveSpeed, playerMoveLimitX);
-                    player.rotation.z = Math.max(player.rotation.z - 0.05, -0.3); // 傾き効果
+                    player.position.x = Math.min(player.position.x + moveSpeed, playerMoveLimitX + courseX);
+                    player.rotation.z = Math.max(player.rotation.z - 0.05, -0.3);
                 }
                 
                 // 傾きのリセット
                 if (!keys['ArrowLeft'] && !keys['ArrowRight'] && !keys['KeyA'] && !keys['KeyD']) {
-                    player.rotation.z *= 0.9; // 徐々に傾きをリセット
+                    player.rotation.z *= 0.9;
                 }
+
+                // 景色の移動速度をプレイヤーのスピードに合わせる
+                const scenerySpeed = playerSpeed * 0.5;
+
+                // 景色の移動
+                moveScenery();
 
                 // 弾丸の発射
                 if (keys['Space']) {
@@ -701,7 +720,7 @@
                     createEnemy();
                 }
                 
-                // 敵の移動と攻撃
+                // 敵の移動
                 for (let i = enemies.length - 1; i >= 0; i--) {
                     const enemy = enemies[i];
                     const speed = basicEnemySpeed * enemy.userData.speed;
@@ -710,6 +729,7 @@
                     switch(enemy.userData.movePattern) {
                         case 0: // 直線移動
                             enemy.position.z += speed;
+                            enemy.position.x += Math.sin(enemy.position.z * courseFrequency) * courseAmplitude * 0.5;
                             break;
                         case 1: // サイン波
                             enemy.position.z += speed;
@@ -761,9 +781,6 @@
                         enemyBullets.splice(i, 1);
                     }
                 }
-
-                // 景色の移動
-                moveScenery();
 
                 // 衝突判定
                 checkCollisions();

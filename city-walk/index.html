@@ -1,0 +1,2519 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ランダム都市マップジェネレーター</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #222;
+            touch-action: none;
+        }
+
+        #player-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: right;
+        }
+        #time-display {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        button {
+            margin-top: 10px;
+            padding: 8px 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            display: none; /* 初期状態では非表示 */
+        }
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: white;
+        }
+        #crosshair::before {
+            width: 2px;
+            height: 20px;
+            left: 9px;
+        }
+        #crosshair::after {
+            width: 20px;
+            height: 2px;
+            top: 9px;
+        }
+        #joystick {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            width: 150px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 75px;
+            touch-action: none;
+        }
+        #joystick-knob {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 25px;
+            transform: translate(-50%, -50%);
+        }
+        #jump-button {
+            position: absolute;
+            bottom: 50px;
+            right: 50px;
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            touch-action: none;
+        }
+        #camera-switch {
+            margin-left: 10px;
+            background-color: #2196F3;
+        }
+        #camera-switch:hover {
+            background-color: #1976D2;
+        }
+        
+        /* ステータスゲージのスタイル */
+        #status-container {
+            position: absolute;
+            top: 50px;
+            right: 10px;
+            width: 200px;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .status-bar {
+            width: 100%;
+            height: 15px;
+            margin: 5px 0;
+            background-color: #333;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .status-fill {
+            height: 100%;
+            width: 100%;
+            transition: width 0.3s ease;
+        }
+        
+        .status-label {
+            color: white;
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+        
+        #health-fill { background-color: #ff4444; }
+        #hunger-fill { background-color: #ffaa44; }
+        #thirst-fill { background-color: #44aaff; }
+        #bleeding-fill { background-color: #ff44ff; }
+        #hygiene-fill { background-color: #44ff44; }
+        #temperature-fill { background-color: #ffff44; }
+        
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+        }
+        
+        #inventory-panel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 800px;
+            height: 60%;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 10px;
+            padding: 20px;
+            display: none;
+            color: white;
+        }
+        
+        #inventory-list {
+            height: calc(100% - 40px);
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        
+        .inventory-item {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+            gap: 10px;
+            padding: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .inventory-item button {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .inventory-item button:hover {
+            background: #45a049;
+        }
+        
+        .inventory-item button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .control-buttons {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+        
+        .control-button {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            user-select: none;
+            touch-action: none;
+        }
+        
+        .control-button:active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        #attack-button {
+            background: rgba(255, 0, 0, 0.3);
+        }
+        
+        #jump-button {
+            background: rgba(0, 255, 0, 0.3);
+        }
+        
+        #bag-button {
+            background: rgba(0, 0, 255, 0.3);
+        }
+        
+        #camera-button {
+            background: rgba(255, 255, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    
+    <div id="player-info">
+        <div id="position">位置: X: 0.00, Y: 0.00, Z: 0.00</div>
+        <div id="biome">バイオーム: 都市</div>
+        <div id="zombie-count">ゾンビ数: 0</div>
+    </div>
+    
+    <div id="time-display">
+        <div id="current-time">時間: 06:00</div>
+    </div>
+    
+    <div id="crosshair"></div>
+    <div id="joystick">
+        <div id="joystick-knob"></div>
+    </div>
+    
+    <div class="control-buttons">
+        <div id="attack-button" class="control-button">🔫</div>
+        <div id="jump-button" class="control-button">⬆️</div>
+        <div id="bag-button" class="control-button">🎒</div>
+        <div id="camera-button" class="control-button">📷</div>
+    </div>
+    
+    <!-- ステータスゲージ -->
+    <div id="status-container">
+        <div class="status-label">体力</div>
+        <div class="status-bar"><div id="health-fill" class="status-fill"></div></div>
+        <div class="status-label">空腹</div>
+        <div class="status-bar"><div id="hunger-fill" class="status-fill"></div></div>
+        <div class="status-label">喉の渇き</div>
+        <div class="status-bar"><div id="thirst-fill" class="status-fill"></div></div>
+        <div class="status-label">出血</div>
+        <div class="status-bar"><div id="bleeding-fill" class="status-fill"></div></div>
+        <div class="status-label">衛生状態</div>
+        <div class="status-bar"><div id="hygiene-fill" class="status-fill"></div></div>
+        <div class="status-label">体温</div>
+        <div class="status-bar"><div id="temperature-fill" class="status-fill"></div></div>
+    </div>
+    
+    <!-- ゲームオーバー画面 -->
+    <div id="game-over">
+        <h2>ゲームオーバー</h2>
+        <p>あなたは生存に失敗しました...</p>
+        <button onclick="location.reload()">リトライ</button>
+    </div>
+    
+
+    
+    <!-- インベントリパネル -->
+    <div id="inventory-panel">
+        <h2>持ち物</h2>
+        <div id="inventory-list"></div>
+    </div>
+    
+    <!-- 最新バージョンのThree.jsを使用 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- OrbitControlsは別途インポート (Three.jsの一部として) -->
+    <script>
+        // OrbitControlsの実装 (Three.jsに含まれなくなったため直接実装)
+        // https://github.com/mrdoob/three.js/blob/dev/examples/jsm/controls/OrbitControls.js を基に簡略化
+        THREE.OrbitControls = function(object, domElement) {
+            this.object = object;
+            this.domElement = (domElement !== undefined) ? domElement : document;
+            
+            // API
+            this.enabled = true;
+            this.center = new THREE.Vector3();
+            
+            this.enableDamping = false;
+            this.dampingFactor = 0.25;
+            
+            this.minDistance = 0;
+            this.maxDistance = Infinity;
+            
+            this.minPolarAngle = 0;
+            this.maxPolarAngle = Math.PI;
+            
+            // マウスボタン
+            this.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+            
+            // 内部状態
+            var scope = this;
+            
+            var EPS = 0.000001;
+            
+            var rotateStart = new THREE.Vector2();
+            var rotateEnd = new THREE.Vector2();
+            var rotateDelta = new THREE.Vector2();
+            
+            var panStart = new THREE.Vector2();
+            var panEnd = new THREE.Vector2();
+            var panDelta = new THREE.Vector2();
+            
+            var dollyStart = new THREE.Vector2();
+            var dollyEnd = new THREE.Vector2();
+            var dollyDelta = new THREE.Vector2();
+            
+            var STATE = { NONE: - 1, ROTATE: 0, DOLLY: 1, PAN: 2, TOUCH_ROTATE: 3, TOUCH_DOLLY: 4, TOUCH_PAN: 5 };
+            var state = STATE.NONE;
+            
+            // アニメーションループ中に更新する必要がある値
+            this.update = function() {
+                // カメラの位置を中心点を基準に更新
+                var position = scope.object.position;
+                
+                position.clampLength(scope.minDistance, scope.maxDistance);
+                
+                return false;
+            };
+            
+            function getAutoRotationAngle() {
+                return 2 * Math.PI / 60 / 60 * scope.autoRotateSpeed;
+            }
+            
+            function getZoomScale() {
+                return Math.pow(0.95, scope.zoomSpeed);
+            }
+            
+            function onMouseDown(event) {
+                event.preventDefault();
+                
+                if (scope.enabled === false) return;
+                
+                if (event.button === scope.mouseButtons.ROTATE) {
+                    state = STATE.ROTATE;
+                    rotateStart.set(event.clientX, event.clientY);
+                } else if (event.button === scope.mouseButtons.DOLLY) {
+                    state = STATE.DOLLY;
+                    dollyStart.set(event.clientX, event.clientY);
+                } else if (event.button === scope.mouseButtons.PAN) {
+                    state = STATE.PAN;
+                    panStart.set(event.clientX, event.clientY);
+                }
+                
+                document.addEventListener('mousemove', onMouseMove, false);
+                document.addEventListener('mouseup', onMouseUp, false);
+            }
+            
+            function onMouseMove(event) {
+                event.preventDefault();
+                
+                if (scope.enabled === false) return;
+                
+                if (state === STATE.ROTATE) {
+                    rotateEnd.set(event.clientX, event.clientY);
+                    rotateDelta.subVectors(rotateEnd, rotateStart);
+                    
+                    // 回転処理
+                    rotateLeft(2 * Math.PI * rotateDelta.x / scope.domElement.clientWidth);
+                    rotateUp(2 * Math.PI * rotateDelta.y / scope.domElement.clientHeight);
+                    
+                    rotateStart.copy(rotateEnd);
+                } else if (state === STATE.DOLLY) {
+                    dollyEnd.set(event.clientX, event.clientY);
+                    dollyDelta.subVectors(dollyEnd, dollyStart);
+                    
+                    if (dollyDelta.y > 0) {
+                        dollyOut(getZoomScale());
+                    } else if (dollyDelta.y < 0) {
+                        dollyIn(getZoomScale());
+                    }
+                    
+                    dollyStart.copy(dollyEnd);
+                } else if (state === STATE.PAN) {
+                    panEnd.set(event.clientX, event.clientY);
+                    panDelta.subVectors(panEnd, panStart);
+                    
+                    pan(panDelta.x, panDelta.y);
+                    
+                    panStart.copy(panEnd);
+                }
+            }
+            
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove, false);
+                document.removeEventListener('mouseup', onMouseUp, false);
+                
+                state = STATE.NONE;
+            }
+            
+            function onMouseWheel(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                if (event.deltaY < 0) {
+                    dollyIn(getZoomScale());
+                } else if (event.deltaY > 0) {
+                    dollyOut(getZoomScale());
+                }
+            }
+            
+            function onKeyDown(event) {
+                if (scope.enabled === false) return;
+                
+                switch (event.keyCode) {
+                    case 38: // up arrow
+                        dollyIn(getZoomScale());
+                        break;
+                    case 40: // down arrow
+                        dollyOut(getZoomScale());
+                        break;
+                }
+            }
+            
+            // イベントリスナー
+            scope.domElement.addEventListener('contextmenu', function(event) { event.preventDefault(); }, false);
+            scope.domElement.addEventListener('mousedown', onMouseDown, false);
+            scope.domElement.addEventListener('wheel', onMouseWheel, false);
+            scope.domElement.addEventListener('keydown', onKeyDown, false);
+            
+            // カメラ操作関数
+            function rotateLeft(angle) {
+                // Y軸周りの回転
+                var quaternion = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+                scope.object.position.sub(scope.center);
+                scope.object.position.applyQuaternion(quaternion);
+                scope.object.position.add(scope.center);
+                scope.object.lookAt(scope.center);
+            }
+            
+            function rotateUp(angle) {
+                // 水平軸周りの回転
+                var axis = new THREE.Vector3().crossVectors(scope.object.up, new THREE.Vector3().subVectors(scope.object.position, scope.center).normalize());
+                var quaternion = new THREE.Quaternion().setFromAxisAngle(axis, angle);
+                scope.object.position.sub(scope.center);
+                scope.object.position.applyQuaternion(quaternion);
+                scope.object.position.add(scope.center);
+                scope.object.lookAt(scope.center);
+            }
+            
+            function dollyIn(dollyScale) {
+                scale /= dollyScale;
+            }
+            
+            function dollyOut(dollyScale) {
+                scale *= dollyScale;
+            }
+            
+            function pan(deltaX, deltaY) {
+                var offset = new THREE.Vector3();
+                
+                var element = scope.domElement === document ? scope.domElement.body : scope.domElement;
+                
+                // パースペクティブ
+                var position = scope.object.position;
+                offset.copy(position).sub(scope.center);
+                var targetDistance = offset.length();
+                
+                // 視野角に基づいてパン速度を計算
+                targetDistance *= Math.tan((scope.object.fov / 2) * Math.PI / 180.0);
+                
+                // 左右に動かす
+                var movLeft = new THREE.Vector3();
+                movLeft.crossVectors(scope.object.up, offset).setLength(2 * deltaX * targetDistance / element.clientHeight);
+                
+                // 上下に動かす
+                var movUp = new THREE.Vector3();
+                movUp.copy(scope.object.up).setLength(2 * deltaY * targetDistance / element.clientHeight);
+                
+                scope.object.position.add(movUp).add(movLeft);
+                scope.center.add(movUp).add(movLeft);
+                
+                scope.object.lookAt(scope.center);
+            }
+            
+            var scale = 1;
+            
+            this.update();
+        };
+        
+        THREE.OrbitControls.prototype = Object.create(THREE.EventDispatcher.prototype);
+        THREE.OrbitControls.prototype.constructor = THREE.OrbitControls;
+    </script>
+    
+    <script>
+        // マップのパラメータ
+        const config = {
+            width: 50,            // マップの幅
+            height: 30,           // マップの高さ
+            minBlockSize: 1,      // ブロックの最小サイズ
+            maxBlockSize: 6,      // ブロックの最大サイズ
+            roadWidth: {
+                min: 0.2,         // 最小道路幅
+                max: 0.5,         // 最大道路幅
+                main: 0.8         // メイン道路幅
+            },
+            subdivisionChance: 0.6, // ブロックを分割する確率
+            maxSubdivisions: 4,   // 最大分割回数
+            buildingHeight: {
+                min: 0.3,         // 最小建物高さ
+                max: 4,           // 最大建物高さ
+                commercial: 3,    // 商業地区の建物高さ
+                residential: 1.5  // 住宅地区の建物高さ
+            },
+            parkChance: 0.2,      // 公園が生成される確率
+            treeSpacing: 20,      // 木の間隔
+            biomeSize: 25,        // バイオームのサイズ（100から25に変更）
+            colors: {
+                background: 0x8888ff, // 背景の色
+                highlight: 0x8888ff   // ハイライトの色
+            },
+            biomes: {
+                city: {
+                    name: "都市",
+                    colors: {
+                        road: 0x228822,       // 道路の色（暗いグレー）
+                        ground: 0x228822,     // 床の色（より暗いグレー）
+                        block: 0x228822,      // ブロックの色
+                        park: 0x228822,       // 公園の色
+                        tree: 0x228822        // 木の色
+                    }
+                },
+                grassland: {
+                    name: "草原",
+                    colors: {
+                        road: 0x228822,       // 道路の色（黄土色）
+                        ground: 0x228822,     // 床の色（明るい緑）
+                        block: 0x228822,      // ブロックの色
+                        park: 0x228822,       // 公園の色
+                        tree: 0x228822        // 木の色
+                    }
+                },
+                forest: {
+                    name: "森林",
+                    colors: {
+                        road: 0x228822,       // 道路の色（暗い緑）
+                        ground: 0x228822,     // 床の色（深い緑）
+                        block: 0x228822,      // ブロックの色
+                        park: 0x228822,       // 公園の色
+                        tree: 0x228822        // 木の色
+                    }
+                },
+                rural: {
+                    name: "農村",
+                    colors: {
+                        road: 0x8B4513,       // 道路の色（茶色）
+                        ground: 0xA67C52,     // 床の色（明るい茶色）
+                        block: 0x6B4423,      // ブロックの色
+                        park: 0x4A7C59,       // 公園の色
+                        tree: 0x31572C        // 木の色
+                    }
+                }
+            }
+        };
+
+        // シーンの初期化
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(config.colors.background);
+        
+        // カメラの設定
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const topDownCamera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        let currentCamera = camera;
+        
+        // カメラの初期位置設定
+        camera.position.set(0, 0.1, 0.3);
+        topDownCamera.position.set(0, 5, 5);
+        topDownCamera.lookAt(0, 0, 0);
+        
+        // レンダラーの設定
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        
+        // コントロールの設定
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.center.set(0, 0, 0);
+        
+        // 光源の設定
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        directionalLight.position.set(50, 100, 50);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.left = -50;
+        directionalLight.shadow.camera.right = 50;
+        directionalLight.shadow.camera.top = 50;
+        directionalLight.shadow.camera.bottom = -50;
+        scene.add(directionalLight);
+        
+        // BSPツリー風のブロック分割アルゴリズムでマップを生成する
+        class Block {
+            constructor(x, y, width, height, depth = 0.5) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.depth = depth;
+                this.subdivided = false;
+                this.children = [];
+            }
+            
+            subdivide() {
+                if (this.subdivided || 
+                    this.width <= config.minBlockSize || 
+                    this.height <= config.minBlockSize) {
+                    return false;
+                }
+                
+                // 分割回数の制限
+                if (Math.random() > Math.pow(config.subdivisionChance, this.getDepth())) {
+                    return false;
+                }
+                
+                // 水平または垂直に分割するかを決定
+                let horizontal = Math.random() < 0.5;
+                
+                // 現在のブロックのサイズに応じて分割方向を調整
+                if (this.width > this.height * 1.5) {
+                    horizontal = false; // 幅が高さより大きい場合は水平分割を優先
+                } else if (this.height > this.width * 1.5) {
+                    horizontal = true;  // 高さが幅より大きい場合は垂直分割を優先
+                }
+                
+                // 分割位置を決定（端から少し内側）
+                const minSplit = 0.3; // 最小分割比率
+                const maxSplit = 0.7; // 最大分割比率
+                const splitRatio = minSplit + Math.random() * (maxSplit - minSplit);
+                
+                // 実際の分割処理
+                if (horizontal) {
+                    // 水平分割
+                    const splitPoint = Math.floor(this.height * splitRatio);
+                    if (splitPoint < config.minBlockSize || 
+                        this.height - splitPoint < config.minBlockSize) {
+                        return false;
+                    }
+                    
+                    this.children.push(
+                        new Block(this.x, this.y, this.width, splitPoint, this.depth + 1),
+                        new Block(this.x, this.y + splitPoint, this.width, this.height - splitPoint, this.depth + 1)
+                    );
+                } else {
+                    // 垂直分割
+                    const splitPoint = Math.floor(this.width * splitRatio);
+                    if (splitPoint < config.minBlockSize || 
+                        this.width - splitPoint < config.minBlockSize) {
+                        return false;
+                    }
+                    
+                    this.children.push(
+                        new Block(this.x, this.y, splitPoint, this.height, this.depth + 1),
+                        new Block(this.x + splitPoint, this.y, this.width - splitPoint, this.height, this.depth + 1)
+                    );
+                }
+                
+                this.subdivided = true;
+                
+                // 再帰的に子ブロックも分割を試みる
+                for (const child of this.children) {
+                    child.subdivide();
+                }
+                
+                return true;
+            }
+            
+            getDepth() {
+                let depth = 0;
+                let current = this;
+                while (current.parent) {
+                    depth++;
+                    current = current.parent;
+                }
+                return depth;
+            }
+            
+            getLeafBlocks() {
+                if (!this.subdivided) {
+                    return [this];
+                }
+                
+                let leaves = [];
+                for (const child of this.children) {
+                    leaves = leaves.concat(child.getLeafBlocks());
+                }
+                return leaves;
+            }
+        }
+        
+        // マップ生成クラス
+        class CityMap {
+            constructor(config, scene) {
+                this.config = config;
+                this.scene = scene;
+                this.blocks = [];
+                this.meshes = new THREE.Group();
+                this.buildOutline = new THREE.Group();
+                this.roadNetwork = new THREE.Group();
+                this.mapSections = new Map(); // マップセクションを管理
+                this.currentSection = '0,0'; // 現在のセクション
+            }
+            
+            // バイオームを決定する関数
+            getBiome(x, z) {
+                // バイオームのサイズに基づいてバイオームを決定
+                const biomeX = Math.floor(x / this.config.biomeSize);
+                const biomeZ = Math.floor(z / this.config.biomeSize);
+                
+                // バイオームの種類を決定（位置に基づいて決定）
+                const biomeTypes = Object.keys(this.config.biomes);
+                const index = Math.abs((biomeX * 7919 + biomeZ * 6037)) % biomeTypes.length;
+                const biomeType = biomeTypes[index];
+                
+                return this.config.biomes[biomeType] || this.config.biomes.city;
+            }
+            
+            // 色の補間を行うヘルパー関数
+            interpolateColor(color1, color2, factor) {
+                const r1 = (color1 >> 16) & 255;
+                const g1 = (color1 >> 8) & 255;
+                const b1 = color1 & 255;
+                
+                const r2 = (color2 >> 16) & 255;
+                const g2 = (color2 >> 8) & 255;
+                const b2 = color2 & 255;
+                
+                const r = Math.round(r1 + (r2 - r1) * factor);
+                const g = Math.round(g1 + (g2 - g1) * factor);
+                const b = Math.round(b1 + (b2 - b1) * factor);
+                
+                return (r << 16) | (g << 8) | b;
+            }
+            
+            // 初期マップを生成
+            generate() {
+                // 中心のセクション（0,0）を生成
+                this.generateSection(0, 0);
+                
+                // 周囲のセクションも生成
+                for (let x = -1; x <= 1; x++) {
+                    for (let z = -1; z <= 1; z++) {
+                        if (x !== 0 || z !== 0) {
+                            this.generateSection(x, z);
+                        }
+                    }
+                }
+
+                // アイテムを生成
+                this.generateItems();
+                
+                return this.meshes;
+            }
+
+            // アイテムを生成するメソッド
+            generateItems() {
+                const sectionSize = this.config.width;
+                const totalSections = 9; // 3x3のセクション
+                const itemsPerSection = Math.floor(itemManager.maxItems / totalSections);
+
+                for (let x = -1; x <= 1; x++) {
+                    for (let z = -1; z <= 1; z++) {
+                        const sectionX = x * sectionSize;
+                        const sectionZ = z * sectionSize;
+
+                        // 各セクションにアイテムを配置
+                        for (let i = 0; i < itemsPerSection; i++) {
+                            const position = new THREE.Vector3(
+                                sectionX + (Math.random() - 0.5) * sectionSize,
+                                1,
+                                sectionZ + (Math.random() - 0.5) * sectionSize
+                            );
+
+                            // 建物や障害物との衝突をチェック
+                            if (!this.checkItemSpawnCollision(position)) {
+                                const type = itemManager.itemTypes[Math.floor(Math.random() * itemManager.itemTypes.length)];
+                                const item = new Item(type, position);
+                                item.createMesh();
+                                this.scene.add(item.mesh);
+                                itemManager.items.add(item);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // アイテムのスポーン位置の衝突判定
+            checkItemSpawnCollision(position) {
+                const raycaster = new THREE.Raycaster();
+                raycaster.set(position, new THREE.Vector3(0, -1, 0));
+                
+                const nearbyObjects = this.scene.children.filter(obj => {
+                    if (obj.type === 'Group') {
+                        const distance = obj.position.distanceTo(position);
+                        return distance < 5;
+                    }
+                    return false;
+                });
+                
+                const intersects = raycaster.intersectObjects(nearbyObjects, true);
+                
+                for (const intersect of intersects) {
+                    if (intersect.object.geometry.type === 'BoxGeometry' && 
+                        intersect.distance < 0.1) {
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            
+            // ブロックを再帰的に分割
+            recursiveSubdivide(block, maxDepth) {
+                if (maxDepth <= 0) return;
+                
+                let subdivided = false;
+                for (const child of block.children) {
+                    if (Math.random() < 0.7) { // 70%の確率で分割する
+                        subdivided = child.subdivide() || subdivided;
+                    }
+                }
+                
+                if (subdivided) {
+                    for (const child of block.children) {
+                        this.recursiveSubdivide(child, maxDepth - 1);
+                    }
+                }
+            }
+            
+            // セクションのキーを生成
+            getSectionKey(x, z) {
+                const sectionX = Math.floor(x / this.config.width);
+                const sectionZ = Math.floor(z / this.config.height);
+                return `${sectionX},${sectionZ}`;
+            }
+            
+            // セクションが存在するかチェック
+            hasSection(x, z) {
+                return this.mapSections.has(this.getSectionKey(x, z));
+            }
+            
+            // 新しいセクションを生成
+            generateSection(sectionX, sectionZ) {
+                const key = `${sectionX},${sectionZ}`;
+                if (this.mapSections.has(key)) return;
+                
+                // セクションのオフセットを計算
+                const offsetX = sectionX * this.config.width;
+                const offsetZ = sectionZ * this.config.height;
+                
+                // 新しいセクションのマップを生成
+                const sectionMap = new THREE.Group();
+                sectionMap.position.set(offsetX, 0, offsetZ);
+                
+                // 最初の大きなブロックを作成
+                const rootBlock = new Block(0, 0, this.config.width, this.config.height);
+                rootBlock.subdivide();
+                
+                // 分割を行う
+                this.recursiveSubdivide(rootBlock, this.config.maxSubdivisions);
+                
+                // 分割済みのリーフブロックだけを保持
+                const blocks = rootBlock.getLeafBlocks();
+                
+                // メッシュを生成
+                this.createSectionMeshes(blocks, sectionMap, offsetX, offsetZ);
+                
+                // セクションを保存
+                this.mapSections.set(key, {
+                    meshes: sectionMap,
+                    blocks: blocks
+                });
+                
+                // シーンに追加
+                this.meshes.add(sectionMap);
+            }
+            
+            // セクションのメッシュを生成
+            createSectionMeshes(blocks, sectionMap, offsetX, offsetZ) {
+                // このセクションのバイオームを取得
+                const biome = this.getBiome(offsetX, offsetZ);
+                
+                // 地面を作成（道路と同じ高さに配置）
+                const groundGeometry = new THREE.PlaneGeometry(
+                    this.config.width * 1.5, 
+                    this.config.height * 1.5
+                );
+                const groundMaterial = new THREE.MeshStandardMaterial({
+                    color: biome.colors.ground,
+                    roughness: 0.8,
+                    metalness: 0.2,
+                });
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.position.y = 0.1;
+                ground.receiveShadow = true;
+                sectionMap.add(ground);
+                
+                // バイオームごとの生成ロジック
+                switch(biome.name) {
+                    case "都市":
+                        this.createCityBuildings(blocks, sectionMap, biome);
+                        break;
+                    case "森林":
+                        this.createForest(blocks, sectionMap, biome);
+                        break;
+                    case "草原":
+                        this.createGrassland(blocks, sectionMap, biome);
+                        break;
+                    case "農村":
+                        this.createRuralArea(blocks, sectionMap, biome);
+                        break;
+                }
+                
+                // 道路網を追加（都市と農村のみ）
+                if (biome.name === "都市" || biome.name === "農村") {
+                    this.createRoadNetwork(blocks, sectionMap, offsetX, offsetZ, biome);
+                }
+            }
+            
+            // 都市の生成
+            createCityBuildings(blocks, sectionMap, biome) {
+                for (const block of blocks) {
+                    const blockSize = Math.min(block.width, block.height);
+                    
+                    // 公園かどうかを決定
+                    const isPark = Math.random() < this.config.parkChance;
+                    
+                    if (isPark) {
+                        // 公園を作成
+                        const parkHeight = 0.2;
+                        const parkGeometry = new THREE.BoxGeometry(
+                            block.width - this.config.roadWidth.main,
+                            parkHeight,
+                            block.height - this.config.roadWidth.main
+                        );
+                        const parkMaterial = new THREE.MeshStandardMaterial({
+                            color: biome.colors.park,
+                            roughness: 0.8,
+                            metalness: 0.1,
+                        });
+                        const parkMesh = new THREE.Mesh(parkGeometry, parkMaterial);
+                        parkMesh.position.set(
+                            block.x + block.width / 2,
+                            parkHeight / 2,
+                            block.y + block.height / 2
+                        );
+                        parkMesh.receiveShadow = true;
+                        sectionMap.add(parkMesh);
+                        
+                        // 公園に木を追加
+                        this.addTrees(block, parkHeight, sectionMap, biome, 0.5);
+                        continue;
+                    }
+                    
+                    // 建物の高さを決定
+                    let height;
+                    if (blockSize > this.config.maxBlockSize * 0.7) {
+                        height = this.config.buildingHeight.commercial + Math.random() * 2;
+                    } else if (block.x % 2 === 0 && block.y % 2 === 0) {
+                        height = this.config.buildingHeight.commercial;
+                    } else if (blockSize < this.config.minBlockSize * 1.5) {
+                        height = this.config.buildingHeight.residential;
+                    } else {
+                        height = this.config.buildingHeight.min + Math.random() * (this.config.buildingHeight.max - this.config.buildingHeight.min);
+                    }
+                    
+                    // 建物の縁を少し内側にする（道路スペース）
+                    const roadOffset = this.config.roadWidth.main;
+                    const boxGeometry = new THREE.BoxGeometry(
+                        block.width - roadOffset,
+                        height,
+                        block.height - roadOffset
+                    );
+                    
+                    // 建物の色を決定
+                    let blockColor;
+                    if (blockSize > this.config.maxBlockSize * 0.7) {
+                        blockColor = new THREE.Color(0x555577);
+                    } else if (block.x % 2 === 0 && block.y % 2 === 0) {
+                        blockColor = new THREE.Color(0x775577);
+                    } else if (blockSize < this.config.minBlockSize * 1.5) {
+                        blockColor = new THREE.Color(0x775555);
+                    } else {
+                        blockColor = new THREE.Color(0x555555);
+                    }
+                    
+                    const boxMaterial = new THREE.MeshStandardMaterial({
+                        color: blockColor,
+                        roughness: 0.7,
+                        metalness: 0.3,
+                    });
+                    const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
+                    boxMesh.position.set(
+                        block.x + block.width / 2,
+                        height / 2,
+                        block.y + block.height / 2
+                    );
+                    boxMesh.castShadow = true;
+                    boxMesh.receiveShadow = true;
+                    sectionMap.add(boxMesh);
+                }
+            }
+            
+            // 森林の生成
+            createForest(blocks, sectionMap, biome) {
+                // 木を密集して配置
+                for (const block of blocks) {
+                    const treeSpacing = 5; // 木の間隔を狭く
+                    const treeHeight = 2 + Math.random() * 1; // 木の高さをランダムに
+                    const treeRadius = 0.5 + Math.random() * 0.3; // 木の太さをランダムに
+                    
+                    for (let x = block.x; x < block.x + block.width; x += treeSpacing) {
+                        for (let z = block.y; z < block.y + block.height; z += treeSpacing) {
+                            // 少しランダムな位置にずらして配置
+                            const offsetX = (Math.random() - 0.5) * treeSpacing;
+                            const offsetZ = (Math.random() - 0.5) * treeSpacing;
+                            this.createTree(x + offsetX, 0, z + offsetZ, treeHeight, treeRadius, sectionMap, biome);
+                        }
+                    }
+                }
+            }
+            
+            // 草原の生成
+            createGrassland(blocks, sectionMap, biome) {
+                for (const block of blocks) {
+                    // 低い建物を点在させる
+                    if (Math.random() < 0.3) { // 30%の確率で建物を生成
+                        const height = 0.5 + Math.random() * 0.5; // 低い建物
+                        const width = 1 + Math.random() * 2;
+                        const depth = 1 + Math.random() * 2;
+                        
+                        const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+                        const buildingMaterial = new THREE.MeshStandardMaterial({
+                            color: biome.colors.block,
+                            roughness: 0.8,
+                            metalness: 0.2,
+                        });
+                        const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                        building.position.set(
+                            block.x + block.width / 2,
+                            height / 2,
+                            block.y + block.height / 2
+                        );
+                        building.castShadow = true;
+                        building.receiveShadow = true;
+                        sectionMap.add(building);
+                    }
+                    
+                    // 草を生やす
+                    const grassSpacing = 3;
+                    for (let x = block.x; x < block.x + block.width; x += grassSpacing) {
+                        for (let z = block.y; z < block.y + block.height; z += grassSpacing) {
+                            if (Math.random() < 0.7) { // 70%の確率で草を生やす
+                                this.createGrass(x, 0, z, sectionMap, biome);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 農村の生成
+            createRuralArea(blocks, sectionMap, biome) {
+                for (const block of blocks) {
+                    // 低い建物を点在させる
+                    if (Math.random() < 0.4) { // 40%の確率で建物を生成
+                        const height = 0.8 + Math.random() * 0.7; // やや高い建物
+                        const width = 2 + Math.random() * 3;
+                        const depth = 2 + Math.random() * 3;
+                        
+                        const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+                        const buildingMaterial = new THREE.MeshStandardMaterial({
+                            color: biome.colors.block,
+                            roughness: 0.8,
+                            metalness: 0.2,
+                        });
+                        const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                        building.position.set(
+                            block.x + block.width / 2,
+                            height / 2,
+                            block.y + block.height / 2
+                        );
+                        building.castShadow = true;
+                        building.receiveShadow = true;
+                        sectionMap.add(building);
+                    }
+                    
+                    // 木を点在させる
+                    if (Math.random() < 0.2) { // 20%の確率で木を生成
+                        const treeHeight = 1.5 + Math.random() * 0.5;
+                        const treeRadius = 0.3;
+                        this.createTree(
+                            block.x + block.width / 2,
+                            0,
+                            block.y + block.height / 2,
+                            treeHeight,
+                            treeRadius,
+                            sectionMap,
+                            biome
+                        );
+                    }
+                }
+            }
+            
+            // 草を生成するメソッド
+            createGrass(x, y, z, sectionMap, biome) {
+                const grassHeight = 0.2 + Math.random() * 0.3;
+                const grassGeometry = new THREE.CylinderGeometry(0.05, 0.1, grassHeight, 4);
+                const grassMaterial = new THREE.MeshStandardMaterial({
+                    color: biome.colors.ground,
+                    roughness: 0.8,
+                    metalness: 0.1,
+                });
+                const grass = new THREE.Mesh(grassGeometry, grassMaterial);
+                grass.position.set(x, y + grassHeight / 2, z);
+                grass.rotation.x = Math.random() * 0.2;
+                grass.rotation.z = Math.random() * 0.2;
+                grass.castShadow = true;
+                sectionMap.add(grass);
+            }
+            
+            // 道路網を生成
+            createRoadNetwork(blocks, sectionMap, offsetX, offsetZ, biome) {
+                // 水平道路と垂直道路のリストを作成
+                const horizontalRoads = new Set();
+                const verticalRoads = new Set();
+                
+                // すべてのブロックのエッジを道路として登録
+                for (const block of blocks) {
+                    horizontalRoads.add(block.y);
+                    horizontalRoads.add(block.y + block.height);
+                    verticalRoads.add(block.x);
+                    verticalRoads.add(block.x + block.width);
+                }
+                
+                // 道路の幅を決定する関数
+                const getRoadWidth = (isMainRoad) => {
+                    if (isMainRoad) {
+                        return this.config.roadWidth.main;
+                    }
+                    return this.config.roadWidth.min + Math.random() * (this.config.roadWidth.max - this.config.roadWidth.min);
+                };
+                
+                // メイン道路かどうかを判定する関数
+                const isMainRoad = (position, roads) => {
+                    const positions = Array.from(roads);
+                    const index = positions.indexOf(position);
+                    return index % 2 === 0 && index > 0 && index < positions.length - 1;
+                };
+                
+                // 水平道路の作成
+                for (const y of horizontalRoads) {
+                    const roadWidth = getRoadWidth(isMainRoad(y, horizontalRoads));
+                    const roadGeometry = new THREE.PlaneGeometry(this.config.width * 1.5, roadWidth * 0.8);
+                    const roadMaterial = new THREE.MeshStandardMaterial({
+                        color: biome.colors.road,
+                        roughness: 0.8,
+                        metalness: 0.2,
+                    });
+                    const road = new THREE.Mesh(roadGeometry, roadMaterial);
+                    road.position.set(0, 0.01, y);
+                    road.rotation.x = -Math.PI / 2;
+                    sectionMap.add(road);
+                }
+                
+                // 垂直道路の作成
+                for (const x of verticalRoads) {
+                    const roadWidth = getRoadWidth(isMainRoad(x, verticalRoads));
+                    const roadGeometry = new THREE.PlaneGeometry(roadWidth * 0.8, this.config.height * 1.5);
+                    const roadMaterial = new THREE.MeshStandardMaterial({
+                        color: biome.colors.road,
+                        roughness: 0.8,
+                        metalness: 0.2,
+                    });
+                    const road = new THREE.Mesh(roadGeometry, roadMaterial);
+                    road.position.set(x, 0.01, 0);
+                    road.rotation.x = -Math.PI / 2;
+                    sectionMap.add(road);
+                }
+            }
+            
+            // 1本の木を作成するメソッド
+            createTree(x, y, z, treeHeight, treeRadius, sectionMap, biome) {
+                // 木の幹
+                const trunkGeometry = new THREE.CylinderGeometry(treeRadius * 0.06, treeRadius * 0.09, treeHeight * 0.09, 8);
+                const trunkMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.9,
+                    metalness: 0.1,
+                });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.set(x, y + treeHeight * 0.045, z);
+                trunk.castShadow = true;
+                sectionMap.add(trunk);
+                
+                // 木の葉
+                const leavesGeometry = new THREE.ConeGeometry(treeRadius * 0.3, treeHeight * 0.21, 8);
+                const leavesMaterial = new THREE.MeshStandardMaterial({
+                    color: biome.colors.tree,
+                    roughness: 0.8,
+                    metalness: 0.1,
+                });
+                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                leaves.position.set(x, y + treeHeight * 0.15, z);
+                leaves.castShadow = true;
+                sectionMap.add(leaves);
+            }
+            
+            // 公園に木を追加するメソッド
+            addTrees(block, baseHeight, sectionMap, biome, treeSpacing) {
+                const treeHeight = 0.45;  // 1.5から0.45に縮小
+                const treeRadius = 0.09;  // 0.3から0.09に縮小
+                
+                for (let x = block.x + treeSpacing; x < block.x + block.width - treeSpacing; x += treeSpacing) {
+                    for (let z = block.y + treeSpacing; z < block.y + block.height - treeSpacing; z += treeSpacing) {
+                        this.createTree(x, baseHeight, z, treeHeight, treeRadius, sectionMap, biome);
+                    }
+                }
+            }
+            
+            // マップのクリーンアップ
+            clear() {
+                scene.remove(this.meshes);
+                this.blocks = [];
+                this.meshes = new THREE.Group();
+                this.buildOutline = new THREE.Group();
+                this.roadNetwork = new THREE.Group();
+                this.mapSections.clear();
+            }
+        }
+        
+        // アイテムクラス
+        class Item {
+            constructor(type, position) {
+                this.type = type;
+                this.position = position;
+                this.mesh = null;
+                this.isCollected = false;
+                
+                // アイテムの効果を定義
+                this.effects = {
+                    'シリアル': { hunger: 30 },
+                    'クラッカー': { hunger: 20 },
+                    '缶詰': { hunger: 40 },
+                    'りんご': { hunger: 15 },
+                    'トマト': { hunger: 10 },
+                    'かぼちゃ': { hunger: 25 },
+                    'ペットボトルの水': { thirst: 50 },
+                    '包帯': { bleeding: 50 },
+                    'Tシャツ': { temperature: 20 },
+                    'ジーパン': { temperature: 15 }
+                };
+            }
+            
+            createMesh() {
+                // アイテムの見た目を設定
+                const geometry = new THREE.BoxGeometry(0.02, 0.02, 0.02);
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: this.getColor(),
+                    emissive: this.getColor(),
+                    emissiveIntensity: 0.5
+                });
+                
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.copy(this.position);
+                this.mesh.position.y = 0.18; // 地面から少し浮かせる
+                this.mesh.castShadow = true;
+                
+                // 回転アニメーション
+                this.mesh.rotation.y = Math.random() * Math.PI * 2;
+                this.rotationSpeed = 0.01;
+            }
+            
+            update() {
+                if (this.mesh) {
+                    this.mesh.rotation.y += this.rotationSpeed;
+                    //this.mesh.position.y = 0.01 + Math.sin(Date.now() * 0.003) * 0.005;
+                }
+            }
+            
+            getColor() {
+                const colors = {
+                    'シリアル': 0xffd700,
+                    'クラッカー': 0xffa500,
+                    '缶詰': 0xc0c0c0,
+                    'りんご': 0xff0000,
+                    'トマト': 0xff6347,
+                    'かぼちゃ': 0xffa500,
+                    'ペットボトルの水': 0x00ffff,
+                    '包帯': 0xffffff,
+                    'Tシャツ': 0x4169e1,
+                    'ジーパン': 0x000080
+                };
+                return colors[this.type] || 0xffffff;
+            }
+            
+            collect() {
+                if (!this.isCollected) {
+                    this.isCollected = true;
+                    if (this.mesh) {
+                        scene.remove(this.mesh);
+                    }
+                    return true;
+                }
+                return false;
+            }
+            
+            applyEffect(playerStatus) {
+                const effect = this.effects[this.type];
+                if (effect) {
+                    for (const [stat, value] of Object.entries(effect)) {
+                        if (stat === 'temperature') {
+                            // 体温減少率を下げる
+                            playerStatus.decreaseRates.temperature *= 0.5;
+                        } else {
+                            // その他のステータスを回復
+                            playerStatus[stat] = Math.min(100, playerStatus[stat] + value);
+                        }
+                    }
+                    playerStatus.updateUI();
+                }
+            }
+        }
+        
+        // アイテムマネージャークラス
+        class ItemManager {
+            constructor(scene) {
+                this.scene = scene;
+                this.items = new Set();
+                this.spawnRadius = 10;
+                this.despawnRadius = 10;
+                this.maxItems = 100; // 最大アイテム数を100に設定
+                this.itemTypes = [
+                    'シリアル', 'クラッカー', '缶詰', 'りんご', 'トマト',
+                    'かぼちゃ', 'ペットボトルの水', '包帯', 'Tシャツ', 'ジーパン'
+                ];
+            }
+            
+            // アイテムの更新処理を修正
+            update(playerPosition) {
+                // アイテムの更新と管理
+                for (const item of this.items) {
+                    if (item.mesh) {
+                        item.update();
+                    }
+                }
+            }
+            
+            spawnItems(playerPosition) {
+                // プレイヤーの周囲にアイテムを生成
+                for (let i = 0; i < 5; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = Math.random() * this.spawnRadius;
+                    const position = new THREE.Vector3(
+                        playerPosition.x + Math.cos(angle) * distance,
+                        1,
+                        playerPosition.z + Math.sin(angle) * distance
+                    );
+                    
+                    const type = this.itemTypes[Math.floor(Math.random() * this.itemTypes.length)];
+                    const item = new Item(type, position);
+                    item.createMesh();
+                    this.scene.add(item.mesh);
+                    this.items.add(item);
+                }
+            }
+            
+            checkCollisions(playerPosition) {
+                for (const item of this.items) {
+                    if (item.mesh) {
+                        const distance = item.mesh.position.distanceTo(playerPosition);
+                        if (distance < 2.0) { // 取得距離を2.0に拡大
+                            if (item.collect()) {
+                                this.items.delete(item);
+                                return item;
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+        }
+        
+        // インベントリクラス
+        class Inventory {
+            constructor() {
+                this.items = [];
+                this.maxItems = 100;
+                this.panel = document.getElementById('inventory-panel');
+                this.list = document.getElementById('inventory-list');
+                this.isOpen = false;
+                
+
+            }
+            
+            addItem(item) {
+                if (this.items.length < this.maxItems) {
+                    this.items.push(item);
+                    this.updateUI();
+                    return true;
+                }
+                return false;
+            }
+            
+            removeItem(index) {
+                if (index >= 0 && index < this.items.length) {
+                    this.items.splice(index, 1);
+                    this.updateUI();
+                    return true;
+                }
+                return false;
+            }
+            
+            useItem(index, playerStatus) {
+                if (index >= 0 && index < this.items.length) {
+                    const item = this.items[index];
+                    item.applyEffect(playerStatus);
+                    this.removeItem(index);
+                    return true;
+                }
+                return false;
+            }
+            
+            toggle() {
+                this.isOpen = !this.isOpen;
+                this.panel.style.display = this.isOpen ? 'block' : 'none';
+                if (this.isOpen) {
+                    this.updateUI();
+                }
+            }
+            
+            updateUI() {
+                this.list.innerHTML = '';
+                
+                // ヘッダー行
+                const header = document.createElement('div');
+                header.className = 'inventory-item';
+                header.innerHTML = `
+                    <div>名前</div>
+                    <div>食べる</div>
+                    <div>装備する</div>
+                    <div>組み合わせる</div>
+                    <div>捨てる</div>
+                `;
+                this.list.appendChild(header);
+                
+                // アイテム行
+                this.items.forEach((item, index) => {
+                    const row = document.createElement('div');
+                    row.className = 'inventory-item';
+                    row.innerHTML = `
+                        <div>${item.type}</div>
+                        <button onclick="inventory.useItem(${index}, characterController.status)">食べる</button>
+                        <button onclick="inventory.useItem(${index}, characterController.status)">装備する</button>
+                        <button disabled>組み合わせる</button>
+                        <button onclick="inventory.removeItem(${index})">捨てる</button>
+                    `;
+                    this.list.appendChild(row);
+                });
+            }
+        }
+        
+        // アイテムマネージャーとインベントリの初期化
+        const itemManager = new ItemManager(scene);
+        const inventory = new Inventory();
+        
+        // キャラクター制御クラス
+        class CharacterController {
+            constructor(scene, camera, topDownCamera) {
+                this.scene = scene;
+                this.camera = camera;
+                this.topDownCamera = topDownCamera;
+                this.currentCamera = camera;
+                this.moveSpeed = 0.01;
+                this.rotationSpeed = 0.03;
+                this.jumpForce = 0.5;
+                this.gravity = 0.015;
+                this.velocity = new THREE.Vector3();
+                this.isJumping = false;
+                this.isGrounded = false;
+                this.raycaster = new THREE.Raycaster();
+                this.collisionDistance = 0.1;
+                
+                // ジョイスティックの状態
+                this.joystick = {
+                    active: false,
+                    position: new THREE.Vector2(),
+                    startPosition: new THREE.Vector2(),
+                    currentPosition: new THREE.Vector2(),
+                    element: document.getElementById('joystick'),
+                    knob: document.getElementById('joystick-knob')
+                };
+                
+                // ゲームパッドの状態
+                this.gamepad = null;
+                this.gamepadConnected = false;
+                
+                // キャラクターの作成
+                this.createCharacter();
+                
+                // 入力状態
+                this.keys = {
+                    forward: false,
+                    backward: false,
+                    left: false,
+                    right: false,
+                    jump: false
+                };
+                
+                // マウス制御
+                this.mouseSensitivity = 0.002;
+                this.mouseX = 0;
+                this.mouseY = 0;
+                
+                // イベントリスナーの設定
+                this.setupEventListeners();
+                
+                // プレイヤーステータスの初期化
+                this.status = new PlayerStatus();
+                this.isMoving = false;
+                
+                // 射撃関連のプロパティ
+                this.bullets = [];
+                this.isAiming = false;
+                this.lastShotTime = 0;
+                this.shootCooldown = 500; // 0.5秒のクールダウン
+                
+                // 照準の表示/非表示
+                this.crosshair = document.getElementById('crosshair');
+            }
+            
+            createCharacter() {
+                // キャラクターのグループ
+                this.character = new THREE.Group();
+                
+                // キャラクターの体
+                const bodyGeometry = new THREE.BoxGeometry(0.012, 0.024, 0.012);
+                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+                this.body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                this.body.position.y = 0.012;
+                this.character.add(this.body);
+                
+                // キャラクターの頭
+                const headGeometry = new THREE.BoxGeometry(0.008, 0.008, 0.008);
+                const headMaterial = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
+                this.head = new THREE.Mesh(headGeometry, headMaterial);
+                this.head.position.y = 0.028;
+                this.character.add(this.head);
+                
+                // 腕
+                const armGeometry = new THREE.BoxGeometry(0.003, 0.012, 0.003);
+                const armMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+                
+                this.leftArm = new THREE.Mesh(armGeometry, armMaterial);
+                this.leftArm.position.set(-0.008, 0.012, 0);
+                this.character.add(this.leftArm);
+                
+                this.rightArm = new THREE.Mesh(armGeometry, armMaterial);
+                this.rightArm.position.set(0.008, 0.012, 0);
+                this.character.add(this.rightArm);
+                
+                // 影を落とす
+                this.character.traverse((object) => {
+                    if (object instanceof THREE.Mesh) {
+                        object.castShadow = true;
+                        object.receiveShadow = true;
+                    }
+                });
+                
+                this.scene.add(this.character);
+                this.character.position.set(0, 0, 0);
+            }
+            
+            setupEventListeners() {
+                // キーボード入力
+                document.addEventListener('keydown', (e) => this.onKeyDown(e));
+                document.addEventListener('keyup', (e) => this.onKeyUp(e));
+                
+                // タッチ入力
+                this.joystick.element.addEventListener('touchstart', (e) => this.onJoystickStart(e));
+                this.joystick.element.addEventListener('touchmove', (e) => this.onJoystickMove(e));
+                this.joystick.element.addEventListener('touchend', () => this.onJoystickEnd());
+                
+                // 攻撃ボタン
+                document.getElementById('attack-button').addEventListener('touchstart', () => {
+                    this.shoot();
+                });
+                
+                // ジャンプボタン
+                document.getElementById('jump-button').addEventListener('touchstart', () => {
+                    this.keys.jump = true;
+                });
+                document.getElementById('jump-button').addEventListener('touchend', () => {
+                    this.keys.jump = false;
+                });
+                
+                // バッグボタン
+                document.getElementById('bag-button').addEventListener('click', () => {
+                    inventory.toggle();
+                });
+                
+                // カメラ切り替えボタン
+                document.getElementById('camera-button').addEventListener('click', () => {
+                    this.currentCamera = this.currentCamera === this.camera ? this.topDownCamera : this.camera;
+                });
+                
+                // ゲームパッド接続イベント
+                window.addEventListener('gamepadconnected', (e) => {
+                    console.log('Gamepad connected:', e.gamepad);
+                    this.gamepad = e.gamepad;
+                    this.gamepadConnected = true;
+                });
+                
+                window.addEventListener('gamepaddisconnected', () => {
+                    console.log('Gamepad disconnected');
+                    this.gamepad = null;
+                    this.gamepadConnected = false;
+                });
+            }
+            
+            onJoystickStart(event) {
+                event.preventDefault();
+                const touch = event.touches[0];
+                const rect = this.joystick.element.getBoundingClientRect();
+                
+                this.joystick.active = true;
+                this.joystick.startPosition.set(
+                    touch.clientX - rect.left - rect.width / 2,
+                    touch.clientY - rect.top - rect.height / 2
+                );
+                this.joystick.currentPosition.copy(this.joystick.startPosition);
+                this.updateJoystickPosition();
+            }
+            
+            onJoystickMove(event) {
+                if (!this.joystick.active) return;
+                event.preventDefault();
+                
+                const touch = event.touches[0];
+                const rect = this.joystick.element.getBoundingClientRect();
+                
+                this.joystick.currentPosition.set(
+                    touch.clientX - rect.left - rect.width / 2,
+                    touch.clientY - rect.top - rect.height / 2
+                );
+                
+                // ジョイスティックの範囲を制限
+                const distance = this.joystick.currentPosition.length();
+                const maxDistance = rect.width / 2 - 25; // ノブの半径を考慮
+                if (distance > maxDistance) {
+                    this.joystick.currentPosition.normalize().multiplyScalar(maxDistance);
+                }
+                
+                this.updateJoystickPosition();
+            }
+            
+            onJoystickEnd() {
+                this.joystick.active = false;
+                this.joystick.currentPosition.set(0, 0);
+                this.updateJoystickPosition();
+            }
+            
+            updateJoystickPosition() {
+                const knob = this.joystick.knob;
+                const x = this.joystick.currentPosition.x;
+                const y = this.joystick.currentPosition.y;
+                knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+            }
+            
+            onKeyDown(event) {
+                switch(event.code) {
+                    case 'KeyW': this.keys.forward = true; break;
+                    case 'KeyS': this.keys.backward = true; break;
+                    case 'KeyA': this.keys.left = true; break;
+                    case 'KeyD': this.keys.right = true; break;
+                    case 'Space': 
+                        this.keys.jump = true;
+                        this.shoot(); // スペースキーで射撃
+                        break;
+                }
+            }
+            
+            onKeyUp(event) {
+                switch(event.code) {
+                    case 'KeyW': this.keys.forward = false; break;
+                    case 'KeyS': this.keys.backward = false; break;
+                    case 'KeyA': this.keys.left = false; break;
+                    case 'KeyD': this.keys.right = false; break;
+                    case 'Space': this.keys.jump = false; break;
+                }
+            }
+            
+            update() {
+                // ゲームパッドの状態を更新
+                if (this.gamepadConnected) {
+                    const gamepads = navigator.getGamepads();
+                    this.gamepad = gamepads[this.gamepad.index];
+                    
+                    // 左スティックの入力
+                    const leftStickX = this.gamepad.axes[0];
+                    const leftStickY = this.gamepad.axes[1];
+                    
+                    // デッドゾーン（小さな入力を無視）
+                    const deadzone = 0.1;
+                    if (Math.abs(leftStickX) > deadzone || Math.abs(leftStickY) > deadzone) {
+                        this.joystick.currentPosition.x = leftStickX * 75;
+                        this.joystick.currentPosition.y = leftStickY * 75;
+                        this.joystick.active = true;
+                    } else {
+                        this.joystick.active = false;
+                        this.joystick.currentPosition.set(0, 0);
+                    }
+                    
+                    // Aボタン（ジャンプ）
+                    this.keys.jump = this.gamepad.buttons[0].pressed;
+                    
+                    // ジョイスティックの位置を更新
+                    this.updateJoystickPosition();
+                }
+                
+                // キャラクターの回転（固定）
+                this.character.rotation.y = 0;
+                
+                // 移動方向の計算
+                const moveDirection = new THREE.Vector3();
+                
+                if (this.joystick.active) {
+                    // ジョイスティックの入力を使用
+                    moveDirection.x = this.joystick.currentPosition.x / 75;
+                    moveDirection.z = this.joystick.currentPosition.y / 75;
+                } else {
+                    // キーボードの入力を使用
+                    if (this.keys.forward) moveDirection.z -= 1;
+                    if (this.keys.backward) moveDirection.z += 1;
+                    if (this.keys.left) moveDirection.x -= 1;
+                    if (this.keys.right) moveDirection.x += 1;
+                }
+                
+                // 移動方向をキャラクターの向きに合わせて回転（固定方向）
+                moveDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0);
+                
+                // 重力の適用
+                this.velocity.y -= this.gravity;
+                
+                // 地面との衝突判定
+                this.raycaster.set(
+                    this.character.position.clone().add(new THREE.Vector3(0, 0.1, 0)),
+                    new THREE.Vector3(0, -1, 0)
+                );
+                const groundIntersects = this.raycaster.intersectObjects(this.scene.children, true);
+                
+                // 地面との衝突判定（地面のみをチェック）
+                const groundCheck = groundIntersects.find(obj => 
+                    obj.object.geometry.type === 'PlaneGeometry'
+                );
+                
+                if (groundCheck && groundCheck.distance < 0.2) {
+                    this.isGrounded = true;
+                    this.velocity.y = Math.max(0, this.velocity.y);
+                    this.character.position.y = groundCheck.point.y;
+                } else {
+                    this.isGrounded = false;
+                }
+                
+                // 移動の適用（衝突判定付き）
+                if (moveDirection.length() > 0) {
+                    moveDirection.normalize();
+                    const newPosition = this.character.position.clone().add(
+                        moveDirection.multiplyScalar(this.moveSpeed)
+                    );
+                    
+                    // 移動前に衝突チェック
+                    const canMove = !this.checkCollision(
+                        newPosition.clone().add(new THREE.Vector3(0, 0.1, 0)),
+                        moveDirection
+                    );
+                    
+                    if (canMove) {
+                        this.character.position.x = newPosition.x;
+                        this.character.position.z = newPosition.z;
+                        
+                        // 歩行アニメーション
+                        const walkCycle = Date.now() * 0.01;
+                        this.leftArm.rotation.x = Math.sin(walkCycle) * 0.5;
+                        this.rightArm.rotation.x = Math.sin(walkCycle + Math.PI) * 0.5;
+                    }
+                } else {
+                    // 静止時は腕を元の位置に
+                    this.leftArm.rotation.x = 0;
+                    this.rightArm.rotation.x = 0;
+                }
+                
+                // 垂直方向の移動（重力とジャンプ）
+                if (!this.isGrounded) {
+                    this.character.position.y += this.velocity.y;
+                }
+                
+                // ジャンプ処理
+                if (this.keys.jump && this.isGrounded) {
+                    this.velocity.y = this.jumpForce;
+                    this.isGrounded = false;
+                }
+                
+                // カメラの位置と回転の更新
+                if (this.currentCamera === this.camera) {
+                    // 通常のTPSカメラ
+                    const cameraOffset = new THREE.Vector3(0, 0.1, 0.3);
+                    this.camera.position.copy(this.character.position).add(cameraOffset);
+                    this.camera.lookAt(this.character.position);
+                } else {
+                    // 斜め上からの見下ろしカメラ
+                    this.topDownCamera.position.copy(this.character.position).add(new THREE.Vector3(0, 1, 1));
+                    this.topDownCamera.lookAt(this.character.position);
+                }
+                
+                // 移動状態の更新
+                this.isMoving = moveDirection.length() > 0;
+                
+                // 現在のバイオームを取得
+                const currentBiome = cityMap.getBiome(this.character.position.x, this.character.position.z);
+                
+                // ステータスの更新
+                this.status.update(this.isMoving, currentBiome);
+                
+                // 弾丸の更新
+                this.bullets = this.bullets.filter(bullet => !bullet.update());
+                
+                // 照準モード中は移動速度を下げる
+                if (this.isAiming) {
+                    this.moveSpeed = 0.005; // 通常の半分
+                } else {
+                    this.moveSpeed = 0.01;
+                }
+                
+                // アイテムの更新
+                itemManager.update(this.character.position);
+                
+                // アイテムとの衝突判定
+                const collectedItem = itemManager.checkCollisions(this.character.position);
+                if (collectedItem) {
+                    inventory.addItem(collectedItem);
+                }
+            }
+            
+            // 衝突判定を行うメソッド
+            checkCollision(position, direction) {
+                this.raycaster.set(position, direction);
+                const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+                
+                // 建物と地面のみをチェック
+                const validObjects = intersects.filter(obj => 
+                    obj.object.type === 'Mesh' && 
+                    (obj.object.geometry.type === 'BoxGeometry' || 
+                     obj.object.geometry.type === 'PlaneGeometry')
+                );
+                
+                if (validObjects.length > 0 && validObjects[0].distance < this.collisionDistance) {
+                    return true;
+                }
+                return false;
+            }
+            
+            shoot() {
+                const currentTime = Date.now();
+                if (currentTime - this.lastShotTime < this.shootCooldown) return;
+                
+                this.lastShotTime = currentTime;
+                
+                // 弾丸の生成位置（キャラクターの正面）
+                const bulletPosition = this.character.position.clone();
+                bulletPosition.y += 0.02; // 少し上に調整
+                
+                // 発射方向（キャラクターの向き）
+                const direction = new THREE.Vector3(0, 0, -1);
+                direction.applyQuaternion(this.character.quaternion);
+                
+                // 弾丸を生成
+                const bullet = new Bullet(this.scene, bulletPosition, direction);
+                this.bullets.push(bullet);
+            }
+        }
+        
+        // ゾンビクラス
+        class Zombie {
+            constructor(scene, position) {
+                this.scene = scene;
+                this.speed = 0.03;  // 速度を0.03から0.01に減少
+                this.detectionRadius = 10;
+                this.attackRadius = 1;
+                this.health = 100;
+                this.state = 'wander'; // wander, chase
+                this.wanderDirection = new THREE.Vector3();
+                this.wanderTimer = 0;
+                this.wanderInterval = 2000; // 2秒ごとに方向転換
+                this.lastWanderTime = Date.now();
+                this.isDead = false;
+                
+                // ゾンビのメッシュを作成
+                this.createMesh();
+                this.mesh.position.copy(position);
+                scene.add(this.mesh);
+            }
+            
+            createMesh() {
+                this.mesh = new THREE.Group();
+                
+                // 体
+                const bodyGeometry = new THREE.BoxGeometry(0.012, 0.024, 0.012);
+                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
+                this.body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                this.body.position.y = 0.012;
+                this.mesh.add(this.body);
+                
+                // 頭
+                const headGeometry = new THREE.BoxGeometry(0.008, 0.008, 0.008);
+                const headMaterial = new THREE.MeshStandardMaterial({ color: 0x999999 });
+                this.head = new THREE.Mesh(headGeometry, headMaterial);
+                this.head.position.y = 0.028;
+                this.mesh.add(this.head);
+                
+                // 腕
+                const armGeometry = new THREE.BoxGeometry(0.003, 0.012, 0.003);
+                const armMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
+                
+                this.leftArm = new THREE.Mesh(armGeometry, armMaterial);
+                this.leftArm.position.set(-0.008, 0.012, 0);
+                this.mesh.add(this.leftArm);
+                
+                this.rightArm = new THREE.Mesh(armGeometry, armMaterial);
+                this.rightArm.position.set(0.008, 0.012, 0);
+                this.mesh.add(this.rightArm);
+                
+                // 影を落とす
+                this.mesh.traverse((object) => {
+                    if (object instanceof THREE.Mesh) {
+                        object.castShadow = true;
+                        object.receiveShadow = true;
+                    }
+                });
+            }
+            
+            update(playerPosition) {
+                const distanceToPlayer = this.mesh.position.distanceTo(playerPosition);
+                
+                if (distanceToPlayer < this.attackRadius) {
+                    // プレイヤーにダメージを与える
+                    characterController.status.takeDamage(1);
+                }
+                
+                // プレイヤーとの距離に応じて状態を更新
+                if (distanceToPlayer < this.detectionRadius) {
+                    this.state = 'chase';
+                } else {
+                    this.state = 'wander';
+                }
+                
+                // 状態に応じた行動
+                if (this.state === 'chase') {
+                    // プレイヤーを追いかける
+                    const direction = new THREE.Vector3()
+                        .subVectors(playerPosition, this.mesh.position)
+                        .normalize();
+                    
+                    // 移動前の位置を保存
+                    const oldPosition = this.mesh.position.clone();
+                    
+                    // 移動を試みる
+                    this.mesh.position.add(direction.multiplyScalar(this.speed));
+                    
+                    // 衝突判定
+                    if (this.checkCollision()) {
+                        // 衝突した場合は元の位置に戻す
+                        this.mesh.position.copy(oldPosition);
+                    }
+                    
+                    this.mesh.lookAt(playerPosition);
+                    
+                    // 腕を振るアニメーション
+                    this.leftArm.rotation.x = Math.sin(Date.now() * 0.01) * 0.5;
+                    this.rightArm.rotation.x = Math.sin(Date.now() * 0.01 + Math.PI) * 0.5;
+                } else {
+                    // ランダムに徘徊
+                    if (Date.now() - this.lastWanderTime > this.wanderInterval) {
+                        this.wanderDirection.set(
+                            (Math.random() - 0.5) * 2,
+                            0,
+                            (Math.random() - 0.5) * 2
+                        ).normalize();
+                        this.lastWanderTime = Date.now();
+                    }
+                    
+                    // 移動前の位置を保存
+                    const oldPosition = this.mesh.position.clone();
+                    
+                    // 移動を試みる
+                    this.mesh.position.add(this.wanderDirection.multiplyScalar(this.speed * 0.5));
+                    
+                    // 衝突判定
+                    if (this.checkCollision()) {
+                        // 衝突した場合は元の位置に戻す
+                        this.mesh.position.copy(oldPosition);
+                        // 新しい方向を設定
+                        this.wanderDirection.set(
+                            (Math.random() - 0.5) * 2,
+                            0,
+                            (Math.random() - 0.5) * 2
+                        ).normalize();
+                    }
+                    
+                    this.mesh.lookAt(
+                        this.mesh.position.clone().add(this.wanderDirection)
+                    );
+                    
+                    // 腕を少し動かす
+                    this.leftArm.rotation.x = Math.sin(Date.now() * 0.005) * 0.2;
+                    this.rightArm.rotation.x = Math.sin(Date.now() * 0.005 + Math.PI) * 0.2;
+                }
+            }
+            
+            // 衝突判定（最適化版）
+            checkCollision() {
+                const raycaster = new THREE.Raycaster();
+                const directions = [
+                    new THREE.Vector3(1, 0, 0),   // 右
+                    new THREE.Vector3(-1, 0, 0),  // 左
+                    new THREE.Vector3(0, 0, 1),   // 前
+                    new THREE.Vector3(0, 0, -1)   // 後
+                ];
+                
+                // 近くの建物のみをチェック
+                const nearbyObjects = this.scene.children.filter(obj => {
+                    if (obj.type === 'Group') {
+                        const distance = obj.position.distanceTo(this.mesh.position);
+                        return distance < 3; // 3単位以内の建物のみチェック
+                    }
+                    return false;
+                });
+                
+                for (const direction of directions) {
+                    raycaster.set(this.mesh.position, direction);
+                    const intersects = raycaster.intersectObjects(nearbyObjects, true);
+                    
+                    for (const intersect of intersects) {
+                        if (intersect.object.geometry.type === 'BoxGeometry' && 
+                            intersect.distance < 0.1) {
+                            return true;
+                        }
+                    }
+                }
+                
+                return false;
+            }
+            
+            remove() {
+                this.scene.remove(this.mesh);
+            }
+            
+            takeDamage() {
+                if (!this.isDead) {
+                    this.isDead = true;
+                    this.remove();
+                }
+            }
+        }
+        
+        // 弾丸クラス
+        class Bullet {
+            constructor(scene, position, direction) {
+                this.scene = scene;
+                this.speed = 0.5;
+                this.lifetime = 2000; // 2秒後に消滅
+                this.createdAt = Date.now();
+                
+                // 弾丸のメッシュを作成
+                const geometry = new THREE.SphereGeometry(0.005, 8, 8);
+                const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.copy(position);
+                this.mesh.castShadow = true;
+                
+                // 移動方向を設定
+                this.direction = direction.normalize();
+                
+                scene.add(this.mesh);
+            }
+            
+            update() {
+                // 弾丸を移動
+                this.mesh.position.add(this.direction.multiplyScalar(this.speed));
+                
+                // 寿命が尽きたら削除
+                if (Date.now() - this.createdAt > this.lifetime) {
+                    this.remove();
+                    return true;
+                }
+                return false;
+            }
+            
+            remove() {
+                this.scene.remove(this.mesh);
+            }
+        }
+        
+        // ゾンビマネージャークラス
+        class ZombieManager {
+            constructor(scene) {
+                this.scene = scene;
+                this.zombies = new Set();
+                this.spawnRadius = 2;
+                this.despawnRadius = 3;
+                this.maxZombies =  1;
+                this.spawnInterval = 5000; // 5秒ごとにスポーン
+                this.lastSpawnTime = Date.now();
+                this.currentZombieIndex = 0; // 現在処理中のゾンビのインデックス
+                this.zombiesArray = []; // ゾンビの配列（順次処理用）
+            }
+            
+            update(playerPosition) {
+                // ゾンビの配列を更新（Setから配列へ）
+                this.zombiesArray = Array.from(this.zombies);
+                
+                // 1フレームで処理するゾンビの数（全体の1/4を処理）
+                const zombiesPerFrame = Math.max(1, Math.ceil(this.zombiesArray.length / 4));
+                
+                // 現在のフレームで処理するゾンビの範囲を計算
+                const startIndex = this.currentZombieIndex;
+                const endIndex = Math.min(startIndex + zombiesPerFrame, this.zombiesArray.length);
+                
+                // 指定範囲のゾンビを処理
+                for (let i = startIndex; i < endIndex; i++) {
+                    const zombie = this.zombiesArray[i];
+                    const distanceToPlayer = zombie.mesh.position.distanceTo(playerPosition);
+                    
+                    if (distanceToPlayer > this.despawnRadius) {
+                        zombie.remove();
+                        this.zombies.delete(zombie);
+                    } else {
+                        zombie.update(playerPosition);
+                    }
+                }
+                
+                // 次のフレームの開始インデックスを更新
+                this.currentZombieIndex = endIndex >= this.zombiesArray.length ? 0 : endIndex;
+            }
+            
+            spawnZombie(playerPosition) {
+                // プレイヤーから一定距離離れた位置にスポーン
+                const angle = Math.random() * Math.PI * 2;
+                const spawnPosition = new THREE.Vector3(
+                    playerPosition.x + Math.cos(angle) * this.spawnRadius,
+                    0.1,
+                    playerPosition.z + Math.sin(angle) * this.spawnRadius
+                );
+                
+                // スポーン位置が障害物と重なっていないか確認
+                if (!this.checkSpawnCollision(spawnPosition)) {
+                    const zombie = new Zombie(this.scene, spawnPosition);
+                    this.zombies.add(zombie);
+                }
+            }
+            
+            // スポーン位置の衝突判定（最適化版）
+            checkSpawnCollision(position) {
+                const raycaster = new THREE.Raycaster();
+                raycaster.set(position, new THREE.Vector3(0, -1, 0));
+                
+                // 近くの建物のみをチェック
+                const nearbyObjects = this.scene.children.filter(obj => {
+                    if (obj.type === 'Group') {
+                        const distance = obj.position.distanceTo(position);
+                        return distance < 5; // 5単位以内の建物のみチェック
+                    }
+                    return false;
+                });
+                
+                const intersects = raycaster.intersectObjects(nearbyObjects, true);
+                
+                // 建物や障害物との衝突をチェック
+                for (const intersect of intersects) {
+                    if (intersect.object.geometry.type === 'BoxGeometry' && 
+                        intersect.distance < 0.1) {
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            
+            spawnInitialZombies(playerPosition) {
+                // 最大数のゾンビを一度に生成
+                for (let i = 0; i < this.maxZombies; i++) {
+                    this.spawnZombie(playerPosition);
+                }
+            }
+            
+            clear() {
+                for (const zombie of this.zombies) {
+                    zombie.remove();
+                }
+                this.zombies.clear();
+                this.zombiesArray = [];
+                this.currentZombieIndex = 0;
+            }
+        }
+        
+        // プレイヤーステータスクラス
+        class PlayerStatus {
+            constructor() {
+                this.maxValue = 100;
+                this.health = this.maxValue;
+                this.hunger = this.maxValue;
+                this.thirst = this.maxValue;
+                this.bleeding = this.maxValue;
+                this.hygiene = this.maxValue;
+                this.temperature = this.maxValue;
+                
+                // ステータス減少のタイマー
+                this.lastUpdateTime = Date.now();
+                this.updateInterval = 1000; // 1秒ごとに更新
+                
+                // ステータス減少率
+                this.decreaseRates = {
+                    hunger: 0.1,      // 空腹度の減少率
+                    thirst: 0.15,     // 喉の渇きの減少率
+                    hygiene: 0.05,    // 衛生状態の減少率
+                    temperature: 0.02    // 体温の減少率
+                };
+            }
+            
+            update(isMoving, currentBiome) {
+                const currentTime = Date.now();
+                if (currentTime - this.lastUpdateTime >= this.updateInterval) {
+                    this.lastUpdateTime = currentTime;
+                    
+                    // 移動中は空腹と喉の渇きが減少
+                    if (isMoving) {
+                        this.hunger = Math.max(0, this.hunger - this.decreaseRates.hunger);
+                        this.thirst = Math.max(0, this.thirst - this.decreaseRates.thirst);
+                    }
+                    
+                    // 森の中では衛生状態が減少
+                    if (currentBiome.name === "森林") {
+                        this.hygiene = Math.max(0, this.hygiene - this.decreaseRates.hygiene);
+                    }
+                    
+                    // 体温の自然減少
+                    this.temperature = Math.max(0, this.temperature - this.decreaseRates.temperature);
+                    
+                    // 出血、空腹、喉の渇き、衛生状態、体温が0の場合、体力が減少
+                    if (this.bleeding <= 0 || this.hunger <= 0 || this.thirst <= 0 || 
+                        this.hygiene <= 0 || this.temperature <= 0) {
+                        this.health = Math.max(0, this.health - 0.5);
+                    }
+                    
+                    // 体力が0になったらゲームオーバー
+                    if (this.health <= 0) {
+                        this.gameOver();
+                    }
+                    
+                    this.updateUI();
+                }
+            }
+            
+            takeDamage(amount) {
+                this.bleeding = Math.max(0, this.bleeding - amount);
+                this.updateUI();
+            }
+            
+            updateUI() {
+                document.getElementById('health-fill').style.width = `${this.health}%`;
+                document.getElementById('hunger-fill').style.width = `${this.hunger}%`;
+                document.getElementById('thirst-fill').style.width = `${this.thirst}%`;
+                document.getElementById('bleeding-fill').style.width = `${this.bleeding}%`;
+                document.getElementById('hygiene-fill').style.width = `${this.hygiene}%`;
+                document.getElementById('temperature-fill').style.width = `${this.temperature}%`;
+            }
+            
+            gameOver() {
+                document.getElementById('game-over').style.display = 'block';
+            }
+        }
+        
+        // マップの初期生成
+        let cityMap = new CityMap(config, scene);
+        let mapMeshes = cityMap.generate();
+        scene.add(mapMeshes);
+        
+        // キャラクターコントローラーの初期化
+        const characterController = new CharacterController(scene, camera, topDownCamera);
+        
+        // ゾンビマネージャーの初期化と初期ゾンビの生成
+        const zombieManager = new ZombieManager(scene);
+        zombieManager.spawnInitialZombies(characterController.character.position);
+        
+        // 時間システムの初期化
+        class TimeSystem {
+            constructor() {
+                this.hour = 9; // 開始時間（6時）
+                this.minute = 0;
+                //this.timeScale = 60; // 1秒で1分進む
+                this.timeScale = 1; // 1秒で1分進む
+                this.lastUpdate = Date.now();
+                
+                // 時間帯ごとの色設定
+                this.timeColors = {
+                    dawn: { sky: 0xff7e50, ambient: 0x404040 }, // 夜明け (5-7時)
+                    day: { sky: 0x87ceeb, ambient: 0xffffff },  // 日中 (7-17時)
+                    dusk: { sky: 0xff7e50, ambient: 0x404040 }, // 夕暮れ (17-19時)
+                    night: { sky: 0x000033, ambient: 0x202020 } // 夜 (19-5時)
+                };
+                
+                // 太陽の位置計算用
+                this.sunRadius = 100;
+                this.sunHeight = 50;
+            }
+            
+            update() {
+                const currentTime = Date.now();
+                const deltaTime = (currentTime - this.lastUpdate) / 1000;
+                this.lastUpdate = currentTime;
+                
+                // 時間の更新
+                this.minute += deltaTime * this.timeScale;
+                if (this.minute >= 60) {
+                    this.hour = (this.hour + Math.floor(this.minute / 60)) % 24;
+                    this.minute = this.minute % 60;
+                }
+                
+                // UIの更新
+                document.getElementById('current-time').textContent = 
+                    `時間: ${String(this.hour).padStart(2, '0')}:${String(Math.floor(this.minute)).padStart(2, '0')}`;
+                
+                return this.getTimeOfDay();
+            }
+            
+            getTimeOfDay() {
+                if (this.hour >= 5 && this.hour < 7) return 'dawn';
+                if (this.hour >= 7 && this.hour < 17) return 'day';
+                if (this.hour >= 17 && this.hour < 19) return 'dusk';
+                return 'night';
+            }
+            
+            getSunPosition() {
+                const timeOfDay = this.getTimeOfDay();
+                let sunAngle;
+                
+                switch(timeOfDay) {
+                    case 'dawn':
+                        sunAngle = (this.hour - 5 + this.minute / 60) * Math.PI / 2;
+                        break;
+                    case 'day':
+                        sunAngle = Math.PI / 2 + (this.hour - 7 + this.minute / 60) * Math.PI / 10;
+                        break;
+                    case 'dusk':
+                        sunAngle = Math.PI + (this.hour - 17 + this.minute / 60) * Math.PI / 2;
+                        break;
+                    case 'night':
+                        sunAngle = Math.PI + (this.hour - 19 + this.minute / 60) * Math.PI / 10;
+                        break;
+                }
+                
+                return {
+                    x: Math.cos(sunAngle) * this.sunRadius,
+                    y: Math.sin(sunAngle) * this.sunHeight,
+                    z: Math.sin(sunAngle) * this.sunRadius
+                };
+            }
+            
+            getSkyColor() {
+                return this.timeColors[this.getTimeOfDay()].sky;
+            }
+            
+            getAmbientLight() {
+                return this.timeColors[this.getTimeOfDay()].ambient;
+            }
+        }
+        
+        // 時間システムのインスタンス化
+        const timeSystem = new TimeSystem();
+        
+        // 太陽の作成
+        const sunGeometry = new THREE.SphereGeometry(5, 32, 32);
+        const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+        scene.add(sun);
+        
+        // アニメーションループ
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // 時間の更新
+            const timeOfDay = timeSystem.update();
+            
+            // 太陽の位置更新
+            const sunPos = timeSystem.getSunPosition();
+            sun.position.set(sunPos.x, sunPos.y, sunPos.z);
+            
+            // 空の色を更新
+            scene.background = new THREE.Color(timeSystem.getSkyColor());
+            
+            // 環境光を更新
+            ambientLight.color.setHex(timeSystem.getAmbientLight());
+            
+            // キャラクターの位置に基づいて新しいセクションを生成
+            const characterPos = characterController.character.position;
+            const sectionX = Math.floor(characterPos.x / config.width);
+            const sectionZ = Math.floor(characterPos.z / config.height);
+            
+            // プレイヤー情報の更新
+            document.getElementById('position').textContent = 
+                `位置: X: ${characterPos.x.toFixed(2)}, Y: ${characterPos.y.toFixed(2)}, Z: ${characterPos.z.toFixed(2)}`;
+            
+            // バイオーム情報の更新
+            const currentBiome = cityMap.getBiome(characterPos.x, characterPos.z);
+            document.getElementById('biome').textContent = `バイオーム: ${currentBiome.name}`;
+            
+            // ゾンビの数を表示
+            document.getElementById('zombie-count').textContent = `ゾンビ数: ${zombieManager.zombies.size}`;
+            
+            // 周囲のセクションを生成
+            for (let x = sectionX - 1; x <= sectionX + 1; x++) {
+                for (let z = sectionZ - 1; z <= sectionZ + 1; z++) {
+                    if (!cityMap.hasSection(x * config.width, z * config.height)) {
+                        cityMap.generateSection(x, z);
+                    }
+                }
+            }
+            
+            // ゾンビの更新
+            zombieManager.update(characterPos);
+            
+            characterController.update();
+            renderer.render(scene, characterController.currentCamera);
+            
+            // 弾丸とゾンビの衝突判定
+            checkBulletCollisions(characterController.bullets, zombieManager.zombiesArray);
+        }
+        
+        animate();
+        
+        // 衝突判定を追加
+        function checkBulletCollisions(bullets, zombies) {
+            for (const bullet of bullets) {
+                for (const zombie of zombies) {
+                    if (zombie.isDead) continue;
+                    
+                    const distance = bullet.mesh.position.distanceTo(zombie.mesh.position);
+                    if (distance < 0.1) { // 衝突判定の距離
+                        zombie.takeDamage();
+                        bullet.remove();
+                        break;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
