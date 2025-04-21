@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post-Nuclear War Destroyed City</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+        }
+        #controls input, #controls button {
+            margin: 5px 0;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <h3>Destroyed City Generator</h3>
+        <label for="seed">Seed Value:</label>
+        <input type="text" id="seed" value="12345">
+        <button id="regenerate">Regenerate Map</button>
+        <p>Use WASD to move, mouse to look around</p>
+        <p>Current FPS: <span id="fps">0</span></p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
+    <script>
+        // Main Three.js variables
+        let camera, scene, renderer;
+        let controls;
+        let clock = new THREE.Clock();
+        let moveForward = false;
+        let moveBackward = false;
+        let moveLeft = false;
+        let moveRight = false;
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+        let prevTime = performance.now();
+        let seed = document.getElementById('seed').value;
+        let rng = new Math.seedrandom(seed);
+        let frameCount = 0;
+        let lastFpsUpdate = 0;
+
+        // Constants for map generation
+        const MAP_SIZE = 1000;
+        const GRID_SIZE = 20;
+        const BUILDING_DENSITY = 0.3;
+        const DEBRIS_DENSITY = 0.4;
+        const TREE_DENSITY = 0.15;
+
+        // Building types and materials
+        const buildingTypes = [
+            { name: 'skyscraper', minHeight: 30, maxHeight: 100, color: 0x555555 },
+            { name: 'office', minHeight: 15, maxHeight: 40, color: 0x666666 },
+            { name: 'residential', minHeight: 5, maxHeight: 15, color: 0x777777 },
+            { name: 'industrial', minHeight: 8, maxHeight: 20, color: 0x444444 }
+        ];
+
+        // Tree types
+        const treeTypes = [
+            { name: 'pine', height: 8, trunkColor: 0x3A2517, foliageColor: 0x2D4C1E },
+            { name: 'oak', height: 10, trunkColor: 0x3A2517, foliageColor: 0x336633 }
+        ];
+
+        // Debris types
+        const debrisTypes = [
+            { name: 'concrete', size: 3, color: 0x888888 },
+            { name: 'metal', size: 2, color: 0x777777 },
+            { name: 'glass', size: 1, color: 0xCCFFFF }
+        ];
+
+        // Initialize the scene
+        init();
+        animate();
+
+        // Listen for regeneration
+        document.getElementById('regenerate').addEventListener('click', regenerateMap);
+
+        // First-person controls setup
+        function setupControls() {
+            camera.rotation.order = 'YXZ';
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+        }
+
+        function onMouseMove(event) {
+            const movementX = event.movementX || 0;
+            const movementY = event.movementY || 0;
+
+            camera.rotation.y -= movementX * 0.002;
+            camera.rotation.x -= movementY * 0.002;
+
+            // Limit pitch
+            camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+        }
+
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyD': moveRight = true; break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyD': moveRight = false; break;
+            }
+        }
+
+        function init() {
+            // Set up scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x202020); // Dark gray sky for post-nuclear atmosphere
+            scene.fog = new THREE.FogExp2(0x202020, 0.005);
+
+            // Set up camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.y = 5;
+            camera.position.z = MAP_SIZE / 2;
+
+            // Add ambient light
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            scene.add(ambientLight);
+
+            // Add directional light (sun)
+            const dirLight = new THREE.DirectionalLight(0xCCBB99, 0.5); // Yellowish light for nuclear atmosphere
+            dirLight.position.set(1, 0.75, 0.5);
+            scene.add(dirLight);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Add ground
+            createGround();
+
+            // Generate the map based on seed
+            generateMap();
+
+            // Add controls for camera movement
+            setupControls();
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function createGround() {
+            const groundGeometry = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 32, 32);
+            const groundMaterial = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = 0;
+            scene.add(ground);
+
+            // Add ground texture variation
+            for (let i = 0; i < 500; i++) {
+                const size = 2 + rng() * 10;
+                const crackGeometry = new THREE.PlaneGeometry(size, size / 3);
+                const crackMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x222222,
+                    roughness: 1.0
+                });
+                const crack = new THREE.Mesh(crackGeometry, crackMaterial);
+                crack.rotation.x = -Math.PI / 2;
+                crack.rotation.z = rng() * Math.PI;
+                crack.position.x = (rng() - 0.5) * MAP_SIZE;
+                crack.position.y = 0.05;
+                crack.position.z = (rng() - 0.5) * MAP_SIZE;
+                scene.add(crack);
+            }
+        }
+
+        function generateMap() {
+            // Clear existing objects (except ground)
+            scene.traverse(object => {
+                if (object.userData && object.userData.type && 
+                    ['building', 'debris', 'tree'].includes(object.userData.type)) {
+                    scene.remove(object);
+                }
+            });
+
+            // Create a grid for positioning objects
+            const gridSize = MAP_SIZE / GRID_SIZE;
+            const halfSize = MAP_SIZE / 2;
+
+            // Generate buildings
+            for (let x = 0; x < GRID_SIZE; x++) {
+                for (let z = 0; z < GRID_SIZE; z++) {
+                    if (rng() < BUILDING_DENSITY) {
+                        createBuilding(
+                            x * gridSize - halfSize + (rng() - 0.5) * gridSize * 0.5, 
+                            z * gridSize - halfSize + (rng() - 0.5) * gridSize * 0.5
+                        );
+                    } else if (rng() < TREE_DENSITY) {
+                        // Create fallen tree
+                        createFallenTree(
+                            x * gridSize - halfSize + (rng() - 0.5) * gridSize * 0.5, 
+                            z * gridSize - halfSize + (rng() - 0.5) * gridSize * 0.5
+                        );
+                    }
+                }
+            }
+
+            // Add scattered debris
+            for (let i = 0; i < GRID_SIZE * GRID_SIZE * DEBRIS_DENSITY; i++) {
+                createDebris(
+                    (rng() - 0.5) * MAP_SIZE,
+                    (rng() - 0.5) * MAP_SIZE
+                );
+            }
+        }
+
+        function createBuilding(x, z) {
+            const buildingType = buildingTypes[Math.floor(rng() * buildingTypes.length)];
+            
+            // Base building parameters
+            const width = 5 + rng() * 15;
+            const depth = 5 + rng() * 15;
+            const height = buildingType.minHeight + rng() * (buildingType.maxHeight - buildingType.minHeight);
+            
+            // Calculate destruction level (0-1)
+            const destructionLevel = 0.3 + rng() * 0.7;
+            
+            // Create building geometry
+            const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+            
+            // Use perlin noise or similar to create destruction pattern
+            const vertices = buildingGeometry.attributes.position.array;
+            for (let i = 0; i < vertices.length; i += 3) {
+                // Only deform vertices that are not on the bottom face
+                if (vertices[i + 1] > 0.1) {
+                    vertices[i] += (rng() - 0.5) * destructionLevel * 2;
+                    vertices[i + 1] += (rng() - 0.5) * destructionLevel * 2;
+                    vertices[i + 2] += (rng() - 0.5) * destructionLevel * 2;
+                }
+            }
+            
+            // Change color based on destruction level
+            const colorVariation = (rng() - 0.5) * 0.2;
+            const color = new THREE.Color(buildingType.color);
+            color.r += colorVariation;
+            color.g += colorVariation;
+            color.b += colorVariation;
+            
+            const buildingMaterial = new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.7 + rng() * 0.3,
+                metalness: 0.1,
+                flatShading: true
+            });
+            
+            const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+            
+            // Position the building
+            building.position.set(x, height / 2, z);
+            
+            // Apply random rotation and tilt for heavily destroyed buildings
+            if (destructionLevel > 0.6) {
+                building.rotation.y = rng() * Math.PI / 4;
+                
+                // Tilting the building
+                if (rng() > 0.5) {
+                    building.rotation.x = rng() * destructionLevel * 0.5;
+                } else {
+                    building.rotation.z = rng() * destructionLevel * 0.5;
+                }
+                
+                // Adjust position for tilted buildings
+                building.position.y -= height * destructionLevel * 0.3;
+            }
+            
+            // Add building to scene
+            building.userData = { type: 'building', buildingType: buildingType.name };
+            scene.add(building);
+            
+            // Add broken windows
+            createBrokenWindows(building, width, height, depth);
+            
+            // Create additional debris around heavily destroyed buildings
+            if (destructionLevel > 0.5) {
+                for (let i = 0; i < destructionLevel * 10; i++) {
+                    const debrisX = x + (rng() - 0.5) * width * 2;
+                    const debrisZ = z + (rng() - 0.5) * depth * 2;
+                    createDebris(debrisX, debrisZ);
+                }
+            }
+        }
+
+        function createBrokenWindows(building, width, height, depth) {
+            // Create window pattern on buildings
+            const windowSize = 1;
+            const windowSpacing = 3;
+            
+            // Calculate number of windows per side
+            const widthCount = Math.floor(width / windowSpacing);
+            const heightCount = Math.floor(height / windowSpacing);
+            const depthCount = Math.floor(depth / windowSpacing);
+            
+            const windowGeometry = new THREE.PlaneGeometry(windowSize, windowSize);
+            
+            // Create windows on front and back
+            for (let y = 1; y < heightCount; y++) {
+                for (let x = 0; x < widthCount; x++) {
+                    if (rng() > 0.3) { // 70% chance for a window to exist
+                        const windowMaterial = new THREE.MeshStandardMaterial({
+                            color: rng() > 0.5 ? 0x000000 : 0xCCCCFF, // Broken or intact window
+                            roughness: 0.3,
+                            metalness: 0.8,
+                            transparent: true,
+                            opacity: 0.7
+                        });
+                        
+                        // Front windows
+                        const frontWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                        frontWindow.position.set(
+                            (x * windowSpacing) - (width / 2) + (windowSpacing / 2),
+                            (y * windowSpacing) - (height / 2) + (windowSpacing / 2),
+                            depth / 2 + 0.1
+                        );
+                        building.add(frontWindow);
+                        
+                        // Back windows
+                        const backWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                        backWindow.position.set(
+                            (x * windowSpacing) - (width / 2) + (windowSpacing / 2),
+                            (y * windowSpacing) - (height / 2) + (windowSpacing / 2),
+                            -depth / 2 - 0.1
+                        );
+                        backWindow.rotation.y = Math.PI;
+                        building.add(backWindow);
+                    }
+                }
+            }
+            
+            // Create windows on sides
+            for (let y = 1; y < heightCount; y++) {
+                for (let z = 0; z < depthCount; z++) {
+                    if (rng() > 0.3) { // 70% chance for a window to exist
+                        const windowMaterial = new THREE.MeshStandardMaterial({
+                            color: rng() > 0.5 ? 0x000000 : 0xCCCCFF, // Broken or intact window
+                            roughness: 0.3,
+                            metalness: 0.8,
+                            transparent: true,
+                            opacity: 0.7
+                        });
+                        
+                        // Left windows
+                        const leftWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                        leftWindow.position.set(
+                            -width / 2 - 0.1,
+                            (y * windowSpacing) - (height / 2) + (windowSpacing / 2),
+                            (z * windowSpacing) - (depth / 2) + (windowSpacing / 2)
+                        );
+                        leftWindow.rotation.y = -Math.PI / 2;
+                        building.add(leftWindow);
+                        
+                        // Right windows
+                        const rightWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                        rightWindow.position.set(
+                            width / 2 + 0.1,
+                            (y * windowSpacing) - (height / 2) + (windowSpacing / 2),
+                            (z * windowSpacing) - (depth / 2) + (windowSpacing / 2)
+                        );
+                        rightWindow.rotation.y = Math.PI / 2;
+                        building.add(rightWindow);
+                    }
+                }
+            }
+        }
+
+        function createFallenTree(x, z) {
+            const treeType = treeTypes[Math.floor(rng() * treeTypes.length)];
+            const height = treeType.height * (0.7 + rng() * 0.6); // Variation in tree height
+            
+            // Create trunk
+            const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, height, 8);
+            const trunkMaterial = new THREE.MeshStandardMaterial({
+                color: treeType.trunkColor,
+                roughness: 0.9
+            });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            
+            // Create foliage (for pine trees)
+            let foliage;
+            if (treeType.name === 'pine') {
+                const foliageGeometry = new THREE.ConeGeometry(2, height * 0.7, 8);
+                const foliageMaterial = new THREE.MeshStandardMaterial({
+                    color: treeType.foliageColor,
+                    roughness: 0.8
+                });
+                foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+                foliage.position.y = height * 0.3;
+            } else { // For oak trees
+                const foliageGeometry = new THREE.SphereGeometry(height * 0.3, 8, 6);
+                const foliageMaterial = new THREE.MeshStandardMaterial({
+                    color: treeType.foliageColor,
+                    roughness: 0.8
+                });
+                foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+                foliage.position.y = height * 0.4;
+                
+                // Deform the sphere to make it look more like a natural tree crown
+                const vertices = foliageGeometry.attributes.position.array;
+                for (let i = 0; i < vertices.length; i += 3) {
+                    vertices[i] += (rng() - 0.5) * 0.5;
+                    vertices[i + 1] += (rng() - 0.5) * 0.5;
+                    vertices[i + 2] += (rng() - 0.5) * 0.5;
+                }
+            }
+            
+            // Create tree group
+            const tree = new THREE.Group();
+            tree.add(trunk);
+            if (foliage) tree.add(foliage);
+            
+            // Position and rotate the fallen tree
+            tree.position.set(x, 0.5, z);
+            
+            // Rotate tree to make it fallen
+            const fallAngle = Math.PI / 2 + (rng() - 0.5) * 0.3; // Slightly random fall angle
+            const fallDirection = rng() * Math.PI * 2; // Random fall direction
+            
+            tree.rotation.order = 'ZYX';
+            tree.rotation.y = fallDirection;
+            tree.rotation.z = fallAngle;
+            
+            // Adjust position based on fallen state
+            tree.position.y += Math.sin(fallAngle) * height / 2;
+            
+            // Add tree to scene
+            tree.userData = { type: 'tree', treeType: treeType.name };
+            scene.add(tree);
+        }
+
+        function createDebris(x, z) {
+            const debrisType = debrisTypes[Math.floor(rng() * debrisTypes.length)];
+            
+            // Variable size debris
+            const size = debrisType.size * (0.5 + rng());
+            
+            let debrisGeometry;
+            const geometryType = Math.floor(rng() * 3);
+            
+            // Create different geometry types
+            switch (geometryType) {
+                case 0: // Cube (concrete chunk)
+                    debrisGeometry = new THREE.BoxGeometry(size, size, size);
+                    break;
+                case 1: // Tetrahedron (glass shard)
+                    debrisGeometry = new THREE.TetrahedronGeometry(size);
+                    break;
+                case 2: // Cylinder (pipe/pillar)
+                    debrisGeometry = new THREE.CylinderGeometry(size/3, size/3, size*2, 8);
+                    break;
+            }
+            
+            // Deform geometry to make it look broken
+            const vertices = debrisGeometry.attributes.position.array;
+            for (let i = 0; i < vertices.length; i += 3) {
+                vertices[i] += (rng() - 0.5) * 0.4;
+                vertices[i + 1] += (rng() - 0.5) * 0.4;
+                vertices[i + 2] += (rng() - 0.5) * 0.4;
+            }
+            
+            // Color variation
+            const colorVariation = (rng() - 0.5) * 0.2;
+            const color = new THREE.Color(debrisType.color);
+            color.r += colorVariation;
+            color.g += colorVariation;
+            color.b += colorVariation;
+            
+            const debrisMaterial = new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.7 + rng() * 0.3,
+                metalness: debrisType.name === 'metal' ? 0.7 : 0.1,
+                flatShading: true
+            });
+            
+            const debris = new THREE.Mesh(debrisGeometry, debrisMaterial);
+            
+            // Position the debris
+            debris.position.set(x, size / 2, z);
+            
+            // Random rotation
+            debris.rotation.x = rng() * Math.PI;
+            debris.rotation.y = rng() * Math.PI;
+            debris.rotation.z = rng() * Math.PI;
+            
+            // Add debris to scene
+            debris.userData = { type: 'debris', debrisType: debrisType.name };
+            scene.add(debris);
+        }
+
+        function regenerateMap() {
+            seed = document.getElementById('seed').value;
+            rng = new Math.seedrandom(seed);
+            generateMap();
+        }
+
+        function updateFps() {
+            const now = performance.now();
+            frameCount++;
+            
+            if (now - lastFpsUpdate > 1000) { // Update every second
+                const fps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
+                document.getElementById('fps').textContent = fps;
+                frameCount = 0;
+                lastFpsUpdate = now;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Calculate FPS
+            updateFps();
+            
+            // Update movement
+            const time = performance.now();
+            const delta = (time - prevTime) / 1000;
+            
+            // Apply gravity
+            velocity.y -= 9.8 * delta;
+            
+            // Determine forward/backward direction
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+            
+            const moveSpeed = 30.0;
+            
+            if (moveForward || moveBackward) velocity.z = -direction.z * moveSpeed;
+            else velocity.z = 0;
+            
+            if (moveLeft || moveRight) velocity.x = -direction.x * moveSpeed;
+            else velocity.x = 0;
+            
+            // Simple collision detection (keeping camera above ground)
+            if (camera.position.y < 5) {
+                velocity.y = 0;
+                camera.position.y = 5;
+            }
+            
+            // Apply movement
+            const moveDeltaX = velocity.x * delta;
+            const moveDeltaZ = velocity.z * delta;
+            const moveDeltaY = velocity.y * delta;
+            
+            // Move camera based on direction it's facing
+            camera.position.x += Math.sin(camera.rotation.y) * moveDeltaZ;
+            camera.position.z += Math.cos(camera.rotation.y) * moveDeltaZ;
+            
+            camera.position.x += Math.sin(camera.rotation.y + Math.PI/2) * moveDeltaX;
+            camera.position.z += Math.cos(camera.rotation.y + Math.PI/2) * moveDeltaX;
+            
+            camera.position.y += moveDeltaY;
+            
+            // Simple boundaries
+            const boundary = MAP_SIZE / 2 - 10;
+            camera.position.x = Math.max(-boundary, Math.min(boundary, camera.position.x));
+            camera.position.z = Math.max(-boundary, Math.min(boundary, camera.position.z));
+            
+            prevTime = time;
+            
+            // Render the scene
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
