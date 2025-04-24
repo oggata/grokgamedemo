@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Immersal WebAR Sample</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ar.js/2.2.2/aframe-ar.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/immersal-web-sdk@latest/dist/immersal-web-sdk.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        
+        #form-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 400px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        #status-message {
+            margin-top: 10px;
+            text-align: center;
+            color: #fff;
+            font-weight: bold;
+        }
+        
+        #ar-scene {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            display: none;
+        }
+        
+        #back-button {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 11;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-container">
+        <div id="form-container">
+            <h2 style="text-align: center;">Immersal WebAR</h2>
+            <div class="form-group">
+                <label for="mapId">Map ID:</label>
+                <input type="text" id="mapId" placeholder="Enter your Immersal Map ID">
+            </div>
+            <div class="form-group">
+                <label for="secret">Secret:</label>
+                <input type="password" id="secret" placeholder="Enter your Immersal Secret">
+            </div>
+            <button id="go-button">GO</button>
+        </div>
+        <div id="status-message"></div>
+    </div>
+    
+    <button id="back-button">◀ Back</button>
+    
+    <div id="ar-scene">
+        <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
+            <a-entity id="immersalMap"></a-entity>
+            
+            <!-- 3D model that will be positioned on the map -->
+            <a-entity id="model-container" visible="false">
+                <a-box position="0 0.5 0" color="red" depth="0.5" height="1" width="0.5"></a-box>
+            </a-entity>
+            
+            <a-entity camera></a-entity>
+        </a-scene>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uiContainer = document.getElementById('ui-container');
+            const goButton = document.getElementById('go-button');
+            const statusMessage = document.getElementById('status-message');
+            const arScene = document.getElementById('ar-scene');
+            const backButton = document.getElementById('back-button');
+            const mapIdInput = document.getElementById('mapId');
+            const secretInput = document.getElementById('secret');
+            const modelContainer = document.getElementById('model-container');
+            const immersalMapEntity = document.getElementById('immersalMap');
+            
+            let immersalSDK = null;
+            
+            // Initialize Immersal SDK
+            function initImmersal(mapId, secret) {
+                try {
+                    // Display status
+                    statusMessage.textContent = "Initializing Immersal SDK...";
+                    
+                    // Create a new Immersal SDK instance
+                    immersalSDK = new Immersal.SDK({
+                        mapId: mapId,
+                        secret: secret,
+                        onLocalized: onLocalized,
+                        onError: onError
+                    });
+                    
+                    // Start the localization process
+                    statusMessage.textContent = "Starting localization...";
+                    immersalSDK.startLocalization();
+                    
+                    // Show the AR scene
+                    uiContainer.style.display = 'none';
+                    arScene.style.display = 'block';
+                    backButton.style.display = 'block';
+                    
+                } catch (error) {
+                    statusMessage.textContent = "Error: " + error.message;
+                    console.error("Immersal initialization error:", error);
+                }
+            }
+            
+            // Handler for successful localization
+            function onLocalized(pose) {
+                console.log("Localized successfully:", pose);
+                statusMessage.textContent = "";
+                
+                // Create a transformation matrix from the pose
+                const matrix = new THREE.Matrix4();
+                matrix.fromArray(pose.matrix);
+                
+                // Apply the transformation to the Immersal map entity
+                const object3D = immersalMapEntity.object3D;
+                object3D.matrix.copy(matrix);
+                object3D.matrix.decompose(object3D.position, object3D.quaternion, object3D.scale);
+                
+                // Make the 3D model visible
+                modelContainer.setAttribute('visible', 'true');
+                
+                // Position the model relative to the localized map
+                // You can adjust these values to place the model where you want on the map
+                modelContainer.setAttribute('position', '0 0 0');
+            }
+            
+            // Handler for localization errors
+            function onError(error) {
+                console.error("Localization error:", error);
+                statusMessage.textContent = "Error: " + error.message;
+            }
+            
+            // GO button click handler
+            goButton.addEventListener('click', function() {
+                const mapId = mapIdInput.value.trim();
+                const secret = secretInput.value.trim();
+                
+                if (!mapId || !secret) {
+                    statusMessage.textContent = "Please enter both Map ID and Secret";
+                    return;
+                }
+                
+                initImmersal(mapId, secret);
+            });
+            
+            // Back button click handler
+            backButton.addEventListener('click', function() {
+                // Stop the Immersal SDK
+                if (immersalSDK) {
+                    immersalSDK.stopLocalization();
+                    immersalSDK = null;
+                }
+                
+                // Hide the AR scene and show the UI
+                arScene.style.display = 'none';
+                uiContainer.style.display = 'flex';
+                backButton.style.display = 'none';
+                statusMessage.textContent = "";
+                
+                // Hide the 3D model
+                modelContainer.setAttribute('visible', 'false');
+            });
+        });
+    </script>
+</body>
+</html>

@@ -3,301 +3,321 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>レトロゲームセンターs</title>
+    <title>Grok Game Demo</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #1a1a2e;
-            color: #fff;
-            margin: 0;
-            padding: 0;
-            background-image: radial-gradient(circle, #2a2a4a 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-        
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        header {
-            text-align: center;
-            margin-bottom: 40px;
-            padding: 20px;
-            background-color: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(138, 43, 226, 0.5);
-        }
-        
-        h1 {
-            font-size: 3.5em;
-            margin: 0;
-            color: #ff6b6b;
-            text-shadow: 0 0 10px #ff6b6b, 0 0 20px #ff6b6b;
-            letter-spacing: 2px;
-        }
-        
-        .subtitle {
-            font-size: 1.5em;
-            color: #4cc9f0;
-            margin-top: 10px;
-            text-shadow: 0 0 5px #4cc9f0;
-        }
-        
-        .game-categories {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-        }
-        
-        .category {
-            background: linear-gradient(145deg, #16213e, #0f3460);
-            border-radius: 15px;
-            padding: 20px;
-            transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-            text-align: center;
-        }
-        
-        .category:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
-        }
-        
-        .category h3 {
-            text-align: center;
-            margin-top: 0;
-            padding: 10px;
-            background-color: rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            color: #f8f9fa;
-            font-size: 1.5em;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .category h3::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: linear-gradient(90deg, #ff9a8b, #ff6a88, #ff99ac);
-            transform: scaleX(0);
-            transform-origin: left;
-            transition: transform 0.3s ease;
-        }
-        
-        .category:hover h3::after {
-            transform: scaleX(1);
-        }
-        
-        .game-description {
-            min-height: a5px;
-            margin: 10px 0;
-            font-size: 0.9em;
-            opacity: 0.8;
-        }
-        
-        .game-link {
-            display: inline-block;
-            padding: 10px 20px;
-            background: linear-gradient(135deg, #7579e7, #b28df0);
-            color: white;
-            text-decoration: none;
-            border-radius: 25px;
-            font-weight: bold;
-            font-size: 1.1em;
-            transition: all 0.3s ease;
-            border: none;
-            margin-top: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-        
-        .game-link:hover {
-            background: linear-gradient(135deg, #8590ff, #a17fe0);
-            transform: scale(1.05);
-            box-shadow: 0 6px 12px rgba(117, 121, 231, 0.4);
-        }
-        
-        footer {
-            text-align: center;
-            margin-top: 50px;
-            padding: 20px;
-            color: #a9a9a9;
-            font-size: 0.9em;
+        :root {
+            --primary-color: #1b2838;
+            --secondary-color: #2a475e;
+            --accent-color: #66c0f4;
+            --text-color: #c7d5e0;
+            --card-bg: #1f354b;
+            --card-hover: #2a475e;
         }
 
-        .category-icon {
-            font-size: 2.5em;
-            margin-bottom: 15px;
-            color: #f8f9fa;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--primary-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .header {
+            background-color: var(--secondary-color);
+            padding: 2rem 0;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--accent-color);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.8;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 2rem;
+            padding: 1rem;
+        }
+
+        .game-card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            background-color: var(--card-hover);
+        }
+
+        .game-image {
+            width: 100%;
+            height: 160px;
+            object-fit: cover;
+            border-bottom: 2px solid var(--accent-color);
+        }
+
+        .game-info {
+            padding: 1rem;
+        }
+
+        .game-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: var(--accent-color);
+        }
+
+        .game-description {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 1rem;
+        }
+
+        .game-link {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background-color: var(--accent-color);
+            color: var(--primary-color);
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+
+        .game-link:hover {
+            background-color: #1999ff;
+        }
+
+        .game-tag {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: var(--accent-color);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .game-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .games-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 1rem;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
         }
     </style>
 </head>
 <body>
+    <header class="header">
+        <h1>Grok Game Demo</h1>
+        <p>インタラクティブなゲーム体験をお楽しみください</p>
+    </header>
+
     <div class="container">
-        <header>
-            <h1>レトロゲームセンター</h1>
-            <div class="subtitle">〜 ミニゲーム王国への入り口 〜</div>
-        </header>
-        
-        <div id="game-categories" class="game-categories">
-            <!-- ゲームカテゴリがここに動的に挿入されます -->
+        <div class="games-grid" id="game-categories">
+            <!-- ゲームカードがここに動的に挿入されます -->
         </div>
-        
-        <footer>
-            © 2025 レトロゲームセンター | さあ、あなたの冒険が始まる！
-        </footer>
     </div>
 
     <script>
         // ゲーム情報を配列で定義
-        // 新しいゲームを追加する場合は、この配列に要素を追加するだけでOK
         const games = [
             {
                 name: "シューティングゲーム",
-                description: "ベーシックなシューティングデス",
+                description: "ベーシックなシューティングゲーム",
                 icon: "🎯",
                 url: "./shooting/index.html",
-                buttonText: "プレイする"
+                tag: "アクション"
             },
             {
                 name: "サバイバル",
                 description: "サバイバルゲーム",
-                icon: "🎯",
+                icon: "🌿",
                 url: "./city-walk/index.html",
-                buttonText: "プレイする"
+                tag: "サバイバル"
             },
             {
                 name: "3Dファイティング",
                 description: "2人対戦の格闘ゲームです",
-                icon: "🎯",
+                icon: "👊",
                 url: "./battle/index.html",
-                buttonText: "プレイする"
+                tag: "格闘"
             },
             {
                 name: "ドキドキロード",
                 description: "渋滞した道路を、プレイヤーが横断するゲームです",
-                icon: "🔫",
+                icon: "🚗",
                 url: "./loadpass/index.html",
-                buttonText: "プレイする"
+                tag: "アクション"
             },
             {
                 name: "バス運転",
                 description: "ドライビングシミュレーター",
-                icon: "🎯",
+                icon: "🚌",
                 url: "./bus/index.html",
-                buttonText: "プレイする"
+                tag: "シミュレーション"
             },
             {
                 name: "電車ゲーム",
                 description: "電車のシミュレーター",
-                icon: "🎯",
+                icon: "🚂",
                 url: "./train/index.html",
-                buttonText: "プレイする"
+                tag: "シミュレーション"
             },
             {
                 name: "F1ゲーム",
                 description: "F1のドライブゲーム",
-                icon: "🎯",
+                icon: "🏎️",
                 url: "./f1/index.html",
-                buttonText: "プレイする"
+                tag: "レーシング"
             },
             {
                 name: "忍者シューティング",
                 description: "忍者によるシューティングゲーム",
-                icon: "🔫",
+                icon: "🥷",
                 url: "./ninja/index.html",
-                buttonText: "プレイする"
+                tag: "アクション"
             },
             {
                 name: "巨大モンスターハンティング",
                 description: "巨大なモンスターに剣を振って、戦うゲームです",
-                icon: "🔫",
+                icon: "🐉",
                 url: "./monster/index.html",
-                buttonText: "プレイする"
+                tag: "アクション"
             },
             {
                 name: "ロボットxUFO",
                 description: "空飛ぶロボットがミサイルを発射してUFOを撃退します",
-                icon: "🔫",
+                icon: "🤖",
                 url: "./robot/index.html",
-                buttonText: "プレイする"
+                tag: "シューティング"
             },
             {
                 name: "都市開発ゲーム",
                 description: "地面を整備して、人の住みやすい場所にするゲーム",
-                icon: "👨‍👩‍👧‍👦",
+                icon: "🏙️",
                 url: "./popul/index.html",
-                buttonText: "プレイする"
+                tag: "シミュレーション"
             },
             {
                 name: "ムカデ",
                 description: "ムカデをシューティングする基本的なゲームです",
                 icon: "🐛",
                 url: "./centi/index.html",
-                buttonText: "プレイする"
+                tag: "シューティング"
             },
             {
                 name: "探偵ゲーム",
                 description: "謎を解き明かして事件を解決しよう",
                 icon: "🕵️",
                 url: "./detective/index.html",
-                buttonText: "プレイする"
+                tag: "パズル"
             },
             {
                 name: "AR侍ガード",
                 description: "城を守り、敵の攻撃から王国を守ろう",
                 icon: "🏰",
                 url: "./castle/index.html",
-                buttonText: "プレイする"
+                tag: "AR"
             },
             {
                 name: "ARモグラ",
                 description: "モグラ叩きゲーム",
-                icon: "🏰",
+                icon: "🦫",
                 url: "./armogura/index.html",
-                buttonText: "プレイする"
+                tag: "AR"
             },
             {
                 name: "ランダムcity",
                 description: "ランダムで作る都市",
-                icon: "🏰",
+                icon: "🌆",
                 url: "./city/index.html",
-                buttonText: "プレイする"
+                tag: "シミュレーション"
             },
             {
                 name: "戦艦",
-                description: "戦艦ゲーム",
-                icon: "🏰",
+                description: "3Dの海戦ゲーム。敵の戦艦を撃沈してスコアを獲得しましょう。",
+                icon: "🚢",
                 url: "./battleship/index.html",
-                buttonText: "プレイする"
+                tag: "3D"
+            },
+            {
+                name: "AR-gps",
+                description: "GPSを使ったAR表示のデモです。",
+                icon: "🚢",
+                url: "./ar-gps/index.html",
+                tag: "3D"
+            },
+            {
+                name: "Immersal-demo",
+                description: "Immersalを使ったデモです。",
+                icon: "🚢",
+                url: "./immersal-demo/index.html",
+                tag: "3D"
             },
             {
                 name: "test",
                 description: "test",
-                icon: "🏰",
+                icon: "🧪",
                 url: "./test.html",
-                buttonText: "プレイする"
+                tag: "テスト"
             }
         ];
 
-        // ゲームカテゴリをHTMLに動的に追加する関数
+        // ゲームカードをHTMLに動的に追加する関数
         function renderGames() {
             const container = document.getElementById('game-categories');
             
             games.forEach(game => {
                 const gameElement = document.createElement('div');
-                gameElement.className = 'category';
+                gameElement.className = 'game-card';
                 
                 gameElement.innerHTML = `
-                    <div class="category-icon">${game.icon}</div>
-                    <h3>${game.name}</h3>
-                    <div class="game-description">${game.description}</div>
-                    <a href="${game.url}" class="game-link">${game.buttonText}</a>
+                    <div class="game-icon">${game.icon}</div>
+                    <div class="game-tag">${game.tag}</div>
+                    <div class="game-info">
+                        <h2 class="game-title">${game.name}</h2>
+                        <p class="game-description">${game.description}</p>
+                        <a href="${game.url}" class="game-link">プレイする</a>
+                    </div>
                 `;
                 
                 container.appendChild(gameElement);
