@@ -1,893 +1,615 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grok Game Portal</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>改良版GPS対応AR Model Viewer</title>
+    <!-- A-Frame と AR.js の最新バージョンを使用 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://unpkg.com/aframe-look-at-component@1.0.0/dist/aframe-look-at-component.min.js"></script>
     <style>
-        :root {
-            --primary-color: #171a21;
-            --secondary-color: #1b2838;
-            --card-bg: #2a3f5f;
-            --accent-color: #66c0f4;
-            --hover-color: #1999ff;
-            --text-color: #c7d5e0;
-            --card-hover: #32516c;
-            --card-shadow: rgba(0, 0, 0, 0.4);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: var(--primary-color);
-            color: var(--text-color);
-            line-height: 1.6;
-            background-image: linear-gradient(to bottom, #1b2838, #171a21);
-            min-height: 100vh;
-        }
-
-        .header {
-            background-color: var(--secondary-color);
-            padding: 1.5rem 0;
-            text-align: center;
-            position: relative;
-            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.5);
-            background-image: linear-gradient(to right, #1b2838, #2a3f5f, #1b2838);
-            border-bottom: 2px solid var(--accent-color);
-        }
-
-        .header-content {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 2rem;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-        }
-
-        .logo h1 {
-            font-size: 2.5rem;
-            color: var(--accent-color);
-            margin-left: 1rem;
-            text-shadow: 0 0 10px rgba(102, 192, 244, 0.5);
-        }
-
-        .logo-icon {
-            font-size: 2.5rem;
-            color: var(--accent-color);
-        }
-
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.8;
-            margin-top: 0.5rem;
-        }
-
-        .nav-menu {
-            display: flex;
-            list-style: none;
-        }
-
-        .nav-menu li {
-            margin-left: 1.5rem;
-        }
-
-        .nav-menu a {
-            color: var(--accent-color);
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 1.1rem;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            transition: all 0.3s ease;
-        }
-
-        .nav-menu a:hover {
-            background-color: rgba(102, 192, 244, 0.2);
-            color: var(--hover-color);
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-
-        .category-header {
-            margin: 2rem 0 1rem;
-            color: var(--accent-color);
-            font-size: 1.8rem;
-            border-bottom: 2px solid var(--card-bg);
-            padding-bottom: 0.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .view-all {
-            font-size: 1rem;
-            color: var(--accent-color);
-            text-decoration: none;
-            padding: 0.4rem 1rem;
-            border-radius: 4px;
-            background-color: rgba(102, 192, 244, 0.1);
-            transition: all 0.3s ease;
-        }
-
-        .view-all:hover {
-            background-color: rgba(102, 192, 244, 0.3);
-        }
-
-        .filter-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 2rem 0;
-            padding: 1rem;
-            background-color: var(--secondary-color);
-            border-radius: 8px;
-            box-shadow: 0 2px 8px var(--card-shadow);
-        }
-
-        .search-bar {
-            display: flex;
-            flex: 1;
-            max-width: 600px;
-        }
-
-        .search-bar input {
-            flex: 1;
-            padding: 0.8rem 1rem;
-            border: none;
-            background-color: rgba(0, 0, 0, 0.3);
-            color: var(--text-color);
-            border-radius: 4px 0 0 4px;
-            font-size: 1rem;
-            outline: none;
-        }
-
-        .search-bar button {
-            padding: 0.8rem 1.2rem;
-            background-color: var(--accent-color);
-            color: var(--secondary-color);
-            border: none;
-            border-radius: 0 4px 4px 0;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-
-        .search-bar button:hover {
-            background-color: var(--hover-color);
-        }
-
-        .filter-options {
-            display: flex;
-            align-items: center;
-        }
-
-        .filter-btn {
-            padding: 0.6rem 1rem;
-            margin-left: 1rem;
-            background-color: rgba(102, 192, 244, 0.1);
-            color: var(--accent-color);
-            border: 1px solid var(--accent-color);
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-        }
-
-        .filter-btn i {
-            margin-right: 0.5rem;
-        }
-
-        .filter-btn:hover {
-            background-color: rgba(102, 192, 244, 0.3);
-        }
-
-        .games-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 1.5rem;
-            padding: 1rem 0;
-        }
-
-        .game-card {
-            background-color: var(--card-bg);
-            border-radius: 6px;
+            margin: 0;
             overflow: hidden;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 8px var(--card-shadow);
-            position: relative;
-            height: 100%;
+            font-family: Arial, sans-serif;
+        }
+        #loading-message {
+            position: absolute;
+            top: 50%;
+            width: 100%;
+            text-align: center;
+            font-size: 18px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 0;
+            z-index: 999;
+        }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 0;
+            z-index: 999;
+        }
+        #debug-info {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            font-size: 12px;
+            z-index: 999;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .ui-button {
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            z-index: 999;
+            cursor: pointer;
+            margin: 5px;
+            border-radius: 5px;
+        }
+        #coordinates-panel {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            z-index: 999;
             display: flex;
             flex-direction: column;
-            cursor: pointer;
         }
-
-        .game-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px var(--card-shadow);
-            background-color: var(--card-hover);
+        .form-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            align-items: center;
         }
-
-        .game-card:hover .game-title {
-            color: var(--hover-color);
+        .form-row input {
+            padding: 8px;
+            border: none;
+            border-radius: 3px;
+            width: 120px;
+            margin: 0 5px;
         }
-
-        .game-image-container {
-            position: relative;
-            width: 100%;
-            height: 160px;
-            overflow: hidden;
+        .form-row label {
+            min-width: 120px;
         }
-
-        .game-image {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transition: transform 0.5s ease;
+        .button-row {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 10px;
         }
-
-        .game-card:hover .game-image {
-            transform: scale(1.05);
-        }
-
-        .game-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 100%);
-        }
-
-        .game-price {
-            position: absolute;
+        #toggle-panel {
+            position: fixed;
             bottom: 10px;
             right: 10px;
-            background-color: rgba(0, 0, 0, 0.7);
-            color: var(--accent-color);
-            padding: 0.25rem 0.6rem;
-            border-radius: 4px;
-            font-weight: bold;
-            font-size: 0.9rem;
+            z-index: 1000;
         }
-
-        .game-info {
-            padding: 1rem;
-            flex: 1;
+        .coordinate-display {
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        #model-list {
+            margin-top: 10px;
+        }
+        select {
+            padding: 8px;
+            border: none;
+            border-radius: 3px;
+            width: 120px;
+        }
+        .form-row-small {
             display: flex;
-            flex-direction: column;
-        }
-
-        .game-title {
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-            color: var(--accent-color);
-            transition: color 0.3s ease;
-        }
-
-        .game-description {
-            font-size: 0.9rem;
-            opacity: 0.8;
-            margin-bottom: 1rem;
-            flex: 1;
-        }
-
-        .game-footer {
-            display: flex;
-            justify-content: space-between;
+            justify-content: flex-start;
+            margin: 5px 0;
             align-items: center;
-            margin-top: auto;
         }
-
-        .game-tag {
-            background-color: rgba(102, 192, 244, 0.1);
-            color: var(--accent-color);
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            display: inline-block;
+        .form-row-small input {
+            width: 60px;
+            padding: 5px;
+            margin: 0 5px;
         }
-
-        .rating {
-            display: flex;
-            align-items: center;
-            color: #ffd700;
-            font-size: 0.9rem;
-        }
-
-        .game-link {
-            display: inline-block;
-            width: 100%;
-            padding: 0.8rem 0;
-            background-color: var(--accent-color);
-            color: var(--secondary-color);
-            text-decoration: none;
-            border-radius: 4px;
-            font-weight: bold;
-            text-align: center;
-            transition: all 0.3s ease;
-            margin-top: 1rem;
-        }
-
-        .game-link:hover {
-            background-color: var(--hover-color);
-        }
-
-        .discount-badge {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background-color: #4CAF50;
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            z-index: 10;
-        }
-
-        .new-badge {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background-color: #FF5722;
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            z-index: 10;
-        }
-
-        .popular-badge {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background-color: #9C27B0;
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            z-index: 10;
-        }
-
-        .featured-section {
-            padding: 2rem 0;
-        }
-
-        .featured-container {
-            position: relative;
-            width: 100%;
-            height: 400px;
-            overflow: hidden;
-            border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
-            margin-bottom: 2rem;
-        }
-
-        .featured-image {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            filter: brightness(0.7);
-        }
-
-        .featured-content {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            padding: 2rem;
-            background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%);
-            width: 100%;
-        }
-
-        .featured-title {
-            font-size: 2.5rem;
-            color: var(--accent-color);
-            margin-bottom: 1rem;
-            text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
-        }
-
-        .featured-description {
-            font-size: 1.2rem;
-            color: var(--text-color);
-            margin-bottom: 1.5rem;
-            max-width: 700px;
-        }
-
-        .featured-btn {
-            display: inline-block;
-            padding: 0.8rem 2rem;
-            background-color: var(--accent-color);
-            color: var(--secondary-color);
-            text-decoration: none;
-            border-radius: 4px;
-            font-weight: bold;
-            font-size: 1.1rem;
-            transition: all 0.3s ease;
-        }
-
-        .featured-btn:hover {
-            background-color: var(--hover-color);
-            transform: translateY(-2px);
-        }
-
-        @media (max-width: 768px) {
-            .header-content {
-                flex-direction: column;
-                padding: 1rem;
-            }
-
-            .logo h1 {
-                font-size: 2rem;
-            }
-
-            .nav-menu {
-                margin-top: 1rem;
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-
-            .nav-menu li {
-                margin: 0.5rem;
-            }
-
-            .filter-bar {
-                flex-direction: column;
-            }
-
-            .search-bar {
-                width: 100%;
-                max-width: 100%;
-                margin-bottom: 1rem;
-            }
-
-            .filter-options {
-                width: 100%;
-                justify-content: space-between;
-            }
-
-            .filter-btn {
-                margin-left: 0;
-                margin-right: 0.5rem;
-                padding: 0.5rem;
-                font-size: 0.9rem;
-            }
-
-            .games-grid {
-                grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            }
-
-            .featured-container {
-                height: 300px;
-            }
-
-            .featured-title {
-                font-size: 1.8rem;
-            }
-
-            .featured-description {
-                font-size: 1rem;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .games-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .filter-options {
-                flex-wrap: wrap;
-            }
-
-            .filter-btn {
-                margin-bottom: 0.5rem;
-                width: 48%;
-            }
-        }
-
-        /* ダークモードのスタイル */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --primary-color: #171a21;
-                --secondary-color: #1b2838;
-                --card-bg: #2a3f5f;
-            }
+        .form-row-small label {
+            min-width: 80px;
         }
     </style>
 </head>
 <body>
-    <header class="header">
-        <div class="header-content">
-            <div class="logo">
-                <i class="fas fa-gamepad logo-icon"></i>
-                <h1>Grok Game Portal</h1>
-            </div>
-            <ul class="nav-menu">
-                <li><a href="#"><i class="fas fa-home"></i> ホーム</a></li>
-                <li><a href="#"><i class="fas fa-store"></i> ストア</a></li>
-                <li><a href="#"><i class="fas fa-trophy"></i> 実績</a></li>
-                <li><a href="#"><i class="fas fa-user"></i> プロフィール</a></li>
-            </ul>
-        </div>
-    </header>
+    <div id="loading-message">ARエクスペリエンスを読み込み中...</div>
+    <div id="instructions">カメラを周囲に向けてGPS座標を設定してください</div>
+    <div id="debug-info">デバッグ情報: 初期化中...</div>
+    
+    <!-- ARコンテンツ用のA-Frameシーン -->
+    <a-scene 
+        vr-mode-ui="enabled: false"
+        arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+        renderer="logarithmicDepthBuffer: true; precision: medium;"
+        embedded>
+        
+        <!-- アセット -->
+        <a-assets>
+            <a-asset-item id="duck-model" src="https://cdn.jsdelivr.net/gh/aframevr/assets@latest/gltfs/duck/Duck.gltf"></a-asset-item>
+        </a-assets>
+        
+        <!-- カメラとカーソル -->
+        <a-entity camera look-controls wasd-controls position="0 1.6 0">
+            <a-entity cursor="fuse: false; rayOrigin: mouse;"></a-entity>
+        </a-entity>
+        
+        <!-- GPSエンティティはスクリプトで動的に追加 -->
+        <a-entity id="gps-models-container"></a-entity>
+    </a-scene>
 
-    <div class="container">
-        <div class="featured-section">
-            <div class="featured-container">
-                <img src="https://via.placeholder.com/1200x600" alt="Featured Game" class="featured-image">
-                <div class="featured-content">
-                    <h2 class="featured-title">おすすめゲーム：巨大モンスターハンティング</h2>
-                    <p class="featured-description">巨大なモンスターに剣を振って挑む冒険の旅に出よう。精巧なグラフィックと臨場感あふれるサウンドエフェクトで、モンスターハンティングの世界に没入できます。</p>
-                    <a href="./monster/index.html" class="featured-btn">今すぐプレイ</a>
-                </div>
-            </div>
-        </div>
+    <!-- 座標入力パネルのトグルボタン -->
+    <button id="toggle-panel" class="ui-button">座標パネル表示/非表示</button>
 
-        <div class="filter-bar">
-            <div class="search-bar">
-                <input type="text" placeholder="ゲームを検索...">
-                <button><i class="fas fa-search"></i></button>
-            </div>
-            <div class="filter-options">
-                <button class="filter-btn"><i class="fas fa-filter"></i> フィルター</button>
-                <button class="filter-btn"><i class="fas fa-sort-amount-down"></i> 並び替え</button>
-                <button class="filter-btn"><i class="fas fa-tags"></i> カテゴリ</button>
-            </div>
+    <!-- 座標入力パネル -->
+    <div id="coordinates-panel">
+        <div class="coordinate-display">
+            現在位置: <span id="current-lat">取得中...</span>, <span id="current-lng">取得中...</span>
         </div>
-
-        <div>
-            <h2 class="category-header">
-                人気のゲーム
-                <a href="#" class="view-all">すべて表示 <i class="fas fa-chevron-right"></i></a>
-            </h2>
-            <div class="games-grid" id="popular-games">
-                <!-- 人気ゲームがここに動的に挿入されます -->
-            </div>
+        <div class="form-row">
+            <label for="target-lat">目標緯度:</label>
+            <input type="number" id="target-lat" step="0.00001" placeholder="緯度">
         </div>
-
-        <div>
-            <h2 class="category-header">
-                すべてのゲーム
-                <a href="#" class="view-all">すべて表示 <i class="fas fa-chevron-right"></i></a>
-            </h2>
-            <div class="games-grid" id="all-games">
-                <!-- すべてのゲームがここに動的に挿入されます -->
-            </div>
+        <div class="form-row">
+            <label for="target-lng">目標経度:</label>
+            <input type="number" id="target-lng" step="0.00001" placeholder="経度">
+        </div>
+        <div class="form-row">
+            <label for="model-select">モデル選択:</label>
+            <select id="model-select">
+                <option value="duck">アヒル</option>
+                <option value="box">赤い箱</option>
+                <option value="sphere">青い球</option>
+            </select>
+        </div>
+        <div class="form-row-small">
+            <label for="distance-scale">距離係数:</label>
+            <input type="number" id="distance-scale" value="1" step="0.1" min="0.1">
+            <label for="model-height">高さ(m):</label>
+            <input type="number" id="model-height" value="0" step="0.5">
+        </div>
+        <div class="form-row-small">
+            <label for="model-size">サイズ:</label>
+            <input type="number" id="model-size" value="0.5" step="0.1" min="0.1">
+            <label for="use-relative">相対位置:</label>
+            <input type="checkbox" id="use-relative" checked>
+        </div>
+        <div class="button-row">
+            <button id="use-current-location" class="ui-button">現在位置を使用</button>
+            <button id="place-model" class="ui-button">モデルを配置</button>
+            <button id="clear-models" class="ui-button">全てクリア</button>
+        </div>
+        <div class="button-row">
+            <button id="place-nearby" class="ui-button">近くに配置(10m)</button>
+            <button id="place-test" class="ui-button">テスト配置</button>
+        </div>
+        <div id="model-list">
+            配置済みモデル: <span id="placed-models-count">0</span>
         </div>
     </div>
 
     <script>
-        // ゲーム情報を配列で定義
-        const games = [
-            {
-                name: "シューティングゲーム",
-                description: "ベーシックなシューティングゲーム。敵を倒して高得点を目指そう！",
-                icon: "🎯",
-                url: "./shooting/index.html",
-                tag: "アクション",
-                image: "https://via.placeholder.com/300x200?text=シューティングゲーム",
-                price: "無料",
-                rating: 4.3,
-                isPopular: true
-            },
-            {
-                name: "サバイバル",
-                description: "過酷な環境で生き残るサバイバルゲーム。限られたリソースを管理しながら冒険しよう！",
-                icon: "🌿",
-                url: "./city-walk/index.html",
-                tag: "サバイバル",
-                image: "https://via.placeholder.com/300x200?text=サバイバル",
-                price: "無料",
-                rating: 4.1,
-                isNew: true
-            },
-            {
-                name: "3Dファイティング",
-                description: "リアルな格闘体験を味わえる2人対戦の格闘ゲームです。様々な技を駆使して勝利を掴め！",
-                icon: "👊",
-                url: "./battle/index.html",
-                tag: "格闘",
-                image: "https://via.placeholder.com/300x200?text=3Dファイティング",
-                price: "無料",
-                rating: 4.5,
-                isPopular: true,
-                discount: "50%オフ"
-            },
-            {
-                name: "ドキドキロード",
-                description: "渋滞した道路を横断するハラハラドキドキの冒険。タイミングを見極めて安全に渡り切ろう！",
-                icon: "🚗",
-                url: "./loadpass/index.html",
-                tag: "アクション",
-                image: "https://via.placeholder.com/300x200?text=ドキドキロード",
-                price: "無料",
-                rating: 3.9
-            },
-            {
-                name: "バス運転",
-                description: "臨場感あふれるバス運転シミュレーター。都市を巡りながら乗客を安全に目的地へ届けよう！",
-                icon: "🚌",
-                url: "./bus/index.html",
-                tag: "シミュレーション",
-                image: "https://via.placeholder.com/300x200?text=バス運転",
-                price: "無料",
-                rating: 4.2,
-                isPopular: true
-            },
-            {
-                name: "電車ゲーム",
-                description: "リアルな電車運転シミュレーター。時刻表通りに運行し、乗客を安全に輸送しよう！",
-                icon: "🚂",
-                url: "./train/index.html",
-                tag: "シミュレーション",
-                image: "https://via.placeholder.com/300x200?text=電車ゲーム",
-                price: "無料",
-                rating: 4.4
-            },
-            {
-                name: "F1ゲーム",
-                description: "スピード感溢れるF1レースゲーム。本格的なドライビング体験で世界チャンピオンを目指せ！",
-                icon: "🏎️",
-                url: "./f1/index.html",
-                tag: "レーシング",
-                image: "https://via.placeholder.com/300x200?text=F1ゲーム",
-                price: "無料",
-                rating: 4.6,
-                isNew: true
-            },
-            {
-                name: "忍者シューティング",
-                description: "忍者の力を駆使して敵を倒すアクションゲーム。様々な忍術で敵を翻弄しよう！",
-                icon: "🥷",
-                url: "./ninja/index.html",
-                tag: "アクション",
-                image: "https://via.placeholder.com/300x200?text=忍者シューティング",
-                price: "無料",
-                rating: 4.0
-            },
-            {
-                name: "巨大モンスターハンティング",
-                description: "巨大なモンスターに剣を振って挑む冒険の旅。モンスターを倒して装備を強化しよう！",
-                icon: "🐉",
-                url: "./monster/index.html",
-                tag: "アクション",
-                image: "https://via.placeholder.com/300x200?text=モンスターハンティング",
-                price: "無料",
-                rating: 4.8,
-                isPopular: true
-            },
-            {
-                name: "ロボットxUFO",
-                description: "空飛ぶロボットがミサイルを発射してUFOを撃退するSF風シューティングゲーム！",
-                icon: "🤖",
-                url: "./robot/index.html",
-                tag: "シューティング",
-                image: "https://via.placeholder.com/300x200?text=ロボットxUFO",
-                price: "無料",
-                rating: 4.1
-            },
-            {
-                name: "都市開発ゲーム",
-                description: "あなただけの理想の都市を作り上げる都市開発シミュレーション。経済や住民の幸福度を管理しよう！",
-                icon: "🏙️",
-                url: "./popul/index.html",
-                tag: "シミュレーション",
-                image: "https://via.placeholder.com/300x200?text=都市開発ゲーム",
-                price: "無料",
-                rating: 4.5,
-                isPopular: true
-            },
-            {
-                name: "ムカデ",
-                description: "古典的なムカデシューティングゲーム。どんどん速くなるムカデを撃ち落とせ！",
-                icon: "🐛",
-                url: "./centi/index.html",
-                tag: "シューティング",
-                image: "https://via.placeholder.com/300x200?text=ムカデ",
-                price: "無料",
-                rating: 3.7
-            },
-            {
-                name: "探偵ゲーム",
-                description: "謎を解き明かして事件を解決する本格探偵アドベンチャー。犯人を見つけ出せ！",
-                icon: "🕵️",
-                url: "./detective/index.html",
-                tag: "パズル",
-                image: "https://via.placeholder.com/300x200?text=探偵ゲーム",
-                price: "無料",
-                rating: 4.3,
-                isNew: true
-            },
-            {
-                name: "AR侍ガード",
-                description: "AR技術を使って現実世界で城を守る斬新なゲーム体験。侍となって敵の攻撃から王国を守ろう！",
-                icon: "🏰",
-                url: "./castle/index.html",
-                tag: "AR",
-                image: "https://via.placeholder.com/300x200?text=AR侍ガード",
-                price: "無料",
-                rating: 4.7,
-                isNew: true
-            },
-            {
-                name: "ARモグラ",
-                description: "AR技術を使ったモグラ叩きゲーム。現実空間に現れるモグラを叩いてハイスコアを目指せ！",
-                icon: "🦫",
-                url: "./armogura/index.html",
-                tag: "AR",
-                image: "https://via.placeholder.com/300x200?text=ARモグラ",
-                price: "無料",
-                rating: 4.2
-            },
-            {
-                name: "ランダムcity",
-                description: "毎回異なる都市が生成される不思議な都市シミュレーション。予測不可能な都市開発を楽しもう！",
-                icon: "🌆",
-                url: "./city/index.html",
-                tag: "シミュレーション",
-                image: "https://via.placeholder.com/300x200?text=ランダムCity",
-                price: "無料",
-                rating: 4.0
-            },
-            {
-                name: "戦艦",
-                description: "3Dの海戦ゲーム。敵の戦艦を撃沈してスコアを獲得し、海の覇者となれ！",
-                icon: "🚢",
-                url: "./battleship/index.html",
-                tag: "3D",
-                image: "https://via.placeholder.com/300x200?text=戦艦",
-                price: "無料",
-                rating: 4.4,
-                isPopular: true
-            },
-            {
-                name: "AR-gps",
-                description: "GPSを使ったAR表示のデモ。現実世界と仮想世界を融合した斬新な体験！",
-                icon: "🚢",
-                url: "./ar-gps/index.html",
-                tag: "3D",
-                image: "https://via.placeholder.com/300x200?text=AR-GPS",
-                price: "無料",
-                rating: 3.9,
-                isNew: true
-            },
-            {
-                name: "Immersal-demo",
-                description: "Immersalを使った最新のAR技術デモ。没入感あふれる体験を味わおう！",
-                icon: "🚢",
-                url: "./immersal-demo/index.html",
-                tag: "3D",
-                image: "https://via.placeholder.com/300x200?text=Immersal",
-                price: "無料",
-                rating: 4.1
-            }
-        ];
-
-        // ゲームカードを生成する関数
-        function createGameCard(game) {
-            const card = document.createElement('div');
-            card.className = 'game-card';
+        // ページの読み込みが完了したら実行
+        window.addEventListener('load', function() {
+            const scene = document.querySelector('a-scene');
+            const debugInfo = document.getElementById('debug-info');
+            const loadingMessage = document.getElementById('loading-message');
+            const modelsContainer = document.getElementById('gps-models-container');
             
-            // バッジの追加
-            if (game.discount) {
-                const discountBadge = document.createElement('div');
-                discountBadge.className = 'discount-badge';
-                discountBadge.textContent = game.discount;
-                card.appendChild(discountBadge);
-            } else if (game.isNew) {
-                const newBadge = document.createElement('div');
-                newBadge.className = 'new-badge';
-                newBadge.textContent = 'NEW!';
-                card.appendChild(newBadge);
-            } else if (game.isPopular && !game.discount && !game.isNew) {
-                const popularBadge = document.createElement('div');
-                popularBadge.className = 'popular-badge';
-                popularBadge.textContent = '人気';
-                card.appendChild(popularBadge);
-            }
+            // UI要素の参照
+            const currentLatSpan = document.getElementById('current-lat');
+            const currentLngSpan = document.getElementById('current-lng');
+            const targetLatInput = document.getElementById('target-lat');
+            const targetLngInput = document.getElementById('target-lng');
+            const modelSelect = document.getElementById('model-select');
+            const useCurrentLocationBtn = document.getElementById('use-current-location');
+            const placeModelBtn = document.getElementById('place-model');
+            const clearModelsBtn = document.getElementById('clear-models');
+            const togglePanelBtn = document.getElementById('toggle-panel');
+            const coordinatesPanel = document.getElementById('coordinates-panel');
+            const placedModelsCount = document.getElementById('placed-models-count');
+            const distanceScaleInput = document.getElementById('distance-scale');
+            const modelHeightInput = document.getElementById('model-height');
+            const modelSizeInput = document.getElementById('model-size');
+            const useRelativeCheckbox = document.getElementById('use-relative');
+            const placeNearbyBtn = document.getElementById('place-nearby');
+            const placeTestBtn = document.getElementById('place-test');
             
-            // ゲーム画像コンテナの追加
-            const imageContainer = document.createElement('div');
-            imageContainer.className = 'game-image-container';
+            // 配置済みモデルを追跡する配列
+            let placedModels = [];
             
-            const image = document.createElement('img');
-            image.className = 'game-image';
-            image.src = game.image;
-            image.alt = game.name;
+            debugInfo.textContent = 'デバッグ情報: ページ読み込み完了';
             
-            const overlay = document.createElement('div');
-            overlay.className = 'game-overlay';
+            // 現在位置の追跡変数
+            let currentPosition = {
+                latitude: 0,
+                longitude: 0,
+                accuracy: 0
+            };
             
-            const price = document.createElement('div');
-            price.className = 'game-price';
-            price.textContent = game.price;
-            
-            imageContainer.appendChild(image);
-            imageContainer.appendChild(overlay);
-            imageContainer.appendChild(price);
-            card.appendChild(imageContainer);
-            
-            // ゲーム情報の追加
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'game-info';
-            
-            const title = document.createElement('h2');
-            title.className = 'game-title';
-            title.textContent = game.name;
-            
-            const description = document.createElement('p');
-            description.className = 'game-description';
-            description.textContent = game.description;
-            
-            const footer = document.createElement('div');
-            footer.className = 'game-footer';
-            
-            const tag = document.createElement('span');
-            tag.className = 'game-tag';
-            tag.textContent = game.tag;
-            
-            const rating = document.createElement('div');
-            rating.className = 'rating';
-            rating.innerHTML = `<i class="fas fa-star"></i> ${game.rating}`;
-            
-            footer.appendChild(tag);
-            footer.appendChild(rating);
-            
-            const link = document.createElement('a');
-            link.className = 'game-link';
-            link.href = game.url;
-            link.textContent = 'プレイする';
-            
-            infoDiv.appendChild(title);
-            infoDiv.appendChild(description);
-            infoDiv.appendChild(footer);
-            infoDiv.appendChild(link);
-            
-            card.appendChild(infoDiv);
-            
-            return card;
-        }
-
-        // ゲームをレンダリングする関数
-        function renderGames() {
-            const popularGamesContainer = document.getElementById('popular-games');
-            const allGamesContainer = document.getElementById('all-games');
-            
-            // 人気ゲームをフィルタリング
-            const popularGames = games.filter(game => game.isPopular);
-            
-            // 人気ゲームのレンダリング
-            popularGames.forEach(game => {
-                const gameCard = createGameCard(game);
-                popularGamesContainer.appendChild(gameCard);
+            // 座標パネルの表示/非表示トグル
+            togglePanelBtn.addEventListener('click', function() {
+                if (coordinatesPanel.style.display === 'none') {
+                    coordinatesPanel.style.display = 'flex';
+                } else {
+                    coordinatesPanel.style.display = 'none';
+                }
             });
             
-            // すべてのゲームのレンダリング
-            games.forEach(game => {
-                const gameCard = createGameCard(game);
-                allGamesContainer.appendChild(gameCard);
+            // AR.jsが読み込まれたときのイベント
+            scene.addEventListener('loaded', function() {
+                debugInfo.textContent = 'デバッグ情報: A-Frameシーン読み込み完了';
+                
+                // 位置情報の取得を開始
+                startLocationTracking();
+                
+                // 少し待ってからメッセージを消す
+                setTimeout(function() {
+                    loadingMessage.style.display = 'none';
+                }, 3000);
             });
-        }
-
-        // ページ読み込み時にゲームを表示
-        window.onload = renderGames;
+            
+            // 位置情報の追跡を開始
+            function startLocationTracking() {
+                if ('geolocation' in navigator) {
+                    debugInfo.textContent = 'デバッグ情報: 位置情報サービスを利用可能';
+                    
+                    // 位置情報の監視を開始
+                    const watchId = navigator.geolocation.watchPosition(
+                        // 成功時のコールバック
+                        function(position) {
+                            currentPosition.latitude = position.coords.latitude;
+                            currentPosition.longitude = position.coords.longitude;
+                            currentPosition.accuracy = position.coords.accuracy;
+                            
+                            // UI更新
+                            currentLatSpan.textContent = position.coords.latitude.toFixed(6);
+                            currentLngSpan.textContent = position.coords.longitude.toFixed(6);
+                            
+                            debugInfo.textContent = `デバッグ情報: 位置更新 - ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}, 精度: ${position.coords.accuracy.toFixed(1)}m`;
+                            
+                            // すでに配置されたモデルの位置を更新（相対モードの場合）
+                            if (useRelativeCheckbox.checked) {
+                                updateAllModelsPositions();
+                            }
+                        },
+                        // エラー時のコールバック
+                        function(error) {
+                            debugInfo.textContent = `デバッグ情報: 位置情報エラー - ${error.message}`;
+                            alert(`位置情報の取得に失敗しました: ${error.message}`);
+                        },
+                        // オプション
+                        {
+                            enableHighAccuracy: true,
+                            maximumAge: 0,
+                            timeout: 27000
+                        }
+                    );
+                } else {
+                    debugInfo.textContent = 'デバッグ情報: 位置情報サービスを利用できません';
+                    alert('お使いのブラウザは位置情報をサポートしていません。');
+                }
+            }
+            
+            // 現在位置を使用ボタンの処理
+            useCurrentLocationBtn.addEventListener('click', function() {
+                targetLatInput.value = currentPosition.latitude;
+                targetLngInput.value = currentPosition.longitude;
+                debugInfo.textContent = 'デバッグ情報: 現在位置をターゲットにセット';
+            });
+            
+            // モデル配置ボタンの処理
+            placeModelBtn.addEventListener('click', function() {
+                const targetLat = parseFloat(targetLatInput.value);
+                const targetLng = parseFloat(targetLngInput.value);
+                const selectedModel = modelSelect.value;
+                const modelHeight = parseFloat(modelHeightInput.value);
+                const modelSize = parseFloat(modelSizeInput.value);
+                
+                if (isNaN(targetLat) || isNaN(targetLng)) {
+                    alert('有効な緯度経度を入力してください');
+                    return;
+                }
+                
+                debugInfo.textContent = `デバッグ情報: モデル配置中 - ${targetLat}, ${targetLng}, タイプ: ${selectedModel}, 高さ: ${modelHeight}m, サイズ: ${modelSize}`;
+                
+                // モデルを配置
+                placeModel(targetLat, targetLng, selectedModel, modelHeight, modelSize);
+            });
+            
+            // 近くに配置ボタンの処理
+            placeNearbyBtn.addEventListener('click', function() {
+                // 現在位置から10m北に配置
+                const selectedModel = modelSelect.value;
+                const modelHeight = parseFloat(modelHeightInput.value);
+                const modelSize = parseFloat(modelSizeInput.value);
+                
+                // 緯度1度あたり約111km、10mは約0.00009度
+                const offsetLat = currentPosition.latitude + 0.00009;
+                const offsetLng = currentPosition.longitude;
+                
+                debugInfo.textContent = `デバッグ情報: 近くにモデル配置中 - ${offsetLat}, ${offsetLng}, タイプ: ${selectedModel}`;
+                
+                // モデルを配置
+                placeModel(offsetLat, offsetLng, selectedModel, modelHeight, modelSize);
+            });
+            
+            // テスト配置ボタンの処理
+            placeTestBtn.addEventListener('click', function() {
+                const selectedModel = modelSelect.value;
+                const modelHeight = parseFloat(modelHeightInput.value);
+                const modelSize = parseFloat(modelSizeInput.value);
+                
+                // 直接3D空間に配置（GPS座標変換なし）
+                placeDirectModel(selectedModel, modelHeight, modelSize);
+            });
+            
+            // 全モデルクリアボタンの処理
+            clearModelsBtn.addEventListener('click', function() {
+                // 全モデルを削除
+                while (placedModels.length > 0) {
+                    const modelData = placedModels.pop();
+                    modelsContainer.removeChild(modelData.entity);
+                }
+                
+                // カウンター更新
+                placedModelsCount.textContent = '0';
+                debugInfo.textContent = 'デバッグ情報: 全モデルをクリア';
+            });
+            
+            // GPS座標から3D位置を計算する関数
+            function calculatePositionFromGPS(targetLat, targetLng, currentLat, currentLng) {
+                // スケール係数を取得（ユーザー設定可能）
+                const scaleFactor = parseFloat(distanceScaleInput.value) || 1.0;
+                
+                // 緯度・経度の差分を計算（度）
+                const latDiff = targetLat - currentLat;
+                const lngDiff = targetLng - currentLng;
+                
+                // 緯度1度あたりの距離（メートル）≈ 111,319.9
+                // 経度1度あたりの距離（メートル）≈ 111,319.9 * cos(緯度)
+                const latDistance = latDiff * 111319.9 * scaleFactor;
+                const lngDistance = lngDiff * 111319.9 * Math.cos(currentLat * (Math.PI/180)) * scaleFactor;
+                
+                // デバッグログ
+                const debugMsg = `座標変換: 差分(${latDiff.toFixed(6)}, ${lngDiff.toFixed(6)}) => 距離(${latDistance.toFixed(2)}m, ${lngDistance.toFixed(2)}m)`;
+                console.log(debugMsg);
+                
+                // A-Frame座標系に変換（X: 東西, Z: 南北）
+                // 南がZ+、北がZ-、東がX+、西がX-
+                return {
+                    x: lngDistance,  // 経度の差 => X軸（東西）
+                    y: 0,            // 高さは別途設定
+                    z: -latDistance  // 緯度の差 => Z軸（南北）、北がマイナス
+                };
+            }
+            
+            // 指定座標にモデルを配置する関数
+            function placeModel(latitude, longitude, modelType, height = 0, size = 0.5) {
+                // 相対モードか絶対モードかをチェック
+                const isRelativeMode = useRelativeCheckbox.checked;
+                
+                // 新しいエンティティを作成
+                const entity = document.createElement('a-entity');
+                
+                // 共通の属性を設定
+                entity.setAttribute('look-at', '[camera]');
+                
+                // モデルタイプごとに異なる属性を設定
+                let modelName = '';
+                switch(modelType) {
+                    case 'duck':
+                        entity.setAttribute('gltf-model', '#duck-model');
+                        entity.setAttribute('scale', `${size} ${size} ${size}`);
+                        modelName = 'アヒル';
+                        break;
+                    case 'box':
+                        // 箱のジオメトリを追加
+                        const box = document.createElement('a-box');
+                        box.setAttribute('color', 'red');
+                        box.setAttribute('depth', '1');
+                        box.setAttribute('height', '1');
+                        box.setAttribute('width', '1');
+                        box.setAttribute('scale', `${size} ${size} ${size}`);
+                        entity.appendChild(box);
+                        modelName = '赤い箱';
+                        break;
+                    case 'sphere':
+                        // 球のジオメトリを追加
+                        const sphere = document.createElement('a-sphere');
+                        sphere.setAttribute('color', 'blue');
+                        sphere.setAttribute('radius', '0.5');
+                        sphere.setAttribute('scale', `${size} ${size} ${size}`);
+                        entity.appendChild(sphere);
+                        modelName = '青い球';
+                        break;
+                    default:
+                        console.error('Unknown model type:', modelType);
+                        return;
+                }
+                
+                // 座標を説明するテキストを追加
+                const text = document.createElement('a-text');
+                text.setAttribute('value', `${modelName} (${latitude.toFixed(6)}, ${longitude.toFixed(6)})`);
+                text.setAttribute('position', '0 1.5 0');
+                text.setAttribute('align', 'center');
+                text.setAttribute('color', 'white');
+                text.setAttribute('scale', '0.5 0.5 0.5');
+                entity.appendChild(text);
+                
+                // GPS座標から位置を計算
+                const position = calculatePositionFromGPS(
+                    latitude, 
+                    longitude, 
+                    isRelativeMode ? currentPosition.latitude : 0, 
+                    isRelativeMode ? currentPosition.longitude : 0
+                );
+                
+                // 高さを設定
+                position.y = height;
+                
+                // 位置を設定
+                entity.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+                
+                // モデルコンテナに追加
+                modelsContainer.appendChild(entity);
+                
+                // 配置済みモデルリストに追加（位置情報も保存）
+                placedModels.push({
+                    entity: entity,
+                    latitude: latitude,
+                    longitude: longitude,
+                    height: height,
+                    size: size,
+                    modelType: modelType
+                });
+                
+                // UIを更新
+                placedModelsCount.textContent = placedModels.length;
+                
+                debugInfo.textContent = `モデルを配置しました - ${modelName} at ${latitude}, ${longitude} => 3D位置(${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`;
+            }
+            
+            // 直接3D空間にモデルを配置する関数（テスト用）
+            function placeDirectModel(modelType, height = 0, size = 0.5) {
+                // 新しいエンティティを作成
+                const entity = document.createElement('a-entity');
+                
+                // 共通の属性を設定
+                entity.setAttribute('look-at', '[camera]');
+                
+                // モデルタイプごとに異なる属性を設定
+                let modelName = '';
+                switch(modelType) {
+                    case 'duck':
+                        entity.setAttribute('gltf-model', '#duck-model');
+                        entity.setAttribute('scale', `${size} ${size} ${size}`);
+                        modelName = 'アヒル';
+                        break;
+                    case 'box':
+                        // 箱のジオメトリを追加
+                        const box = document.createElement('a-box');
+                        box.setAttribute('color', 'red');
+                        box.setAttribute('depth', '1');
+                        box.setAttribute('height', '1');
+                        box.setAttribute('width', '1');
+                        box.setAttribute('scale', `${size} ${size} ${size}`);
+                        entity.appendChild(box);
+                        modelName = '赤い箱';
+                        break;
+                    case 'sphere':
+                        // 球のジオメトリを追加
+                        const sphere = document.createElement('a-sphere');
+                        sphere.setAttribute('color', 'blue');
+                        sphere.setAttribute('radius', '0.5');
+                        sphere.setAttribute('scale', `${size} ${size} ${size}`);
+                        entity.appendChild(sphere);
+                        modelName = '青い球';
+                        break;
+                    default:
+                        console.error('Unknown model type:', modelType);
+                        return;
+                }
+                
+                // テスト用の位置を設定（カメラの正面）
+                entity.setAttribute('position', `0 ${height} -3`);
+                
+                // 座標を説明するテキストを追加
+                const text = document.createElement('a-text');
+                text.setAttribute('value', `${modelName} (テスト配置)`);
+                text.setAttribute('position', '0 1.5 0');
+                text.setAttribute('align', 'center');
+                text.setAttribute('color', 'white');
+                text.setAttribute('scale', '0.5 0.5 0.5');
+                entity.appendChild(text);
+                
+                // モデルコンテナに追加
+                modelsContainer.appendChild(entity);
+                
+                // 配置済みモデルリストに追加
+                placedModels.push({
+                    entity: entity,
+                    latitude: null,  // テスト配置なのでGPS座標なし
+                    longitude: null,
+                    height: height,
+                    size: size,
+                    modelType: modelType
+                });
+                
+                // UIを更新
+                placedModelsCount.textContent = placedModels.length;
+                
+                debugInfo.textContent = `テストモデルを配置しました - ${modelName} at 3D位置(0, ${height}, -3)`;
+            }
+            
+            // すべてのモデルの位置を更新する関数（現在位置が変化したとき）
+            function updateAllModelsPositions() {
+                placedModels.forEach(function(modelData) {
+                    // GPS座標がない場合（テスト配置の場合）は更新しない
+                    if (modelData.latitude === null || modelData.longitude === null) {
+                        return;
+                    }
+                    
+                    // GPS座標から新しい位置を計算
+                    const position = calculatePositionFromGPS(
+                        modelData.latitude,
+                        modelData.longitude,
+                        currentPosition.latitude,
+                        currentPosition.longitude
+                    );
+                    
+                    // 高さを設定
+                    position.y = modelData.height;
+                    
+                    // 位置を更新
+                    modelData.entity.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+                });
+            }
+            
+            // ブラウザのGPSアクセス許可要求を表示
+            function requestGeolocationPermission() {
+                if ('geolocation' in navigator) {
+                    navigator.geolocation.getCurrentPosition(function(position) {
+                        // 許可された場合の処理
+                        debugInfo.textContent = 'デバッグ情報: 位置情報へのアクセスが許可されました';
+                    }, function(error) {
+                        // 拒否された場合の処理
+                        debugInfo.textContent = `デバッグ情報: 位置情報へのアクセスが拒否されました - ${error.message}`;
+                        alert('ARでの位置情報の利用が拒否されました。設定を確認してください。');
+                    }, {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    });
+                }
+            }
+            
+            // 初期化時に位置情報へのアクセス許可を要求
+            requestGeolocationPermission();
+            
+            // デバッグ情報の表示タイマー
+            setInterval(function() {
+                if (placedModels.length > 0) {
+                    const lastModel = placedModels[placedModels.length - 1];
+                    if (lastModel.latitude && lastModel.longitude) {
+                        const position = lastModel.entity.getAttribute('position');
+                        debugInfo.textContent += `\n最後のモデル: GPS(${lastModel.latitude.toFixed(6)}, ${lastModel.longitude.toFixed(6)}) => 3D(${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`;
+                    }
+                }
+            }, 5000);
+        });
+    </script>
+</body>
+</html>
