@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Model Viewer</title>
+    <!-- A-Frame と AR.js の最新バージョンを使用 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #loading-message {
+            position: absolute;
+            top: 50%;
+            width: 100%;
+            text-align: center;
+            font-size: 18px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 0;
+            z-index: 999;
+        }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 0;
+            z-index: 999;
+        }
+        #debug-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            font-size: 12px;
+            z-index: 999;
+        }
+        .ui-button {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            z-index: 999;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-message">ARエクスペリエンスを読み込み中...</div>
+    <div id="instructions">平らな面にカメラを向けてください</div>
+    <div id="debug-info">デバッグ情報: 初期化中...</div>
+    <button id="hide-button" class="ui-button" onclick="document.getElementById('instructions').style.display = 'none';">指示を非表示</button>
+
+    <a-scene 
+        vr-mode-ui="enabled: false"
+        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; patternRatio: 0.8;"
+        renderer="logarithmicDepthBuffer: true; precision: medium;"
+        embedded>
+        
+        <!-- カメラへのアクセスを取得する前にユーザーが操作できるようにする -->
+        <a-entity id="camera-permission-ui" position="0 0 -5">
+            <a-box position="0 0 0" color="red" id="startButton" depth="1" height="1" width="1" 
+                  animation="property: rotation; to: 0 360 0; dur: 2000; easing: linear; loop: true">
+            </a-box>
+            <a-text position="0 1.2 0" value="タップしてARを開始" align="center" color="white" scale="1 1 1"></a-text>
+        </a-entity>
+
+        <!-- アセット -->
+        <a-assets>
+            <a-asset-item id="duck-model" src="https://cdn.jsdelivr.net/gh/aframevr/assets@latest/gltfs/duck/Duck.gltf"></a-asset-item>
+        </a-assets>
+        
+        <!-- カメラとカーソル -->
+        <a-entity camera look-controls wasd-controls position="0 1.6 0">
+            <a-entity cursor="fuse: false; rayOrigin: mouse;"></a-entity>
+        </a-entity>
+        
+        <!-- マーカーなしでも表示できるようにする -->
+        <a-entity id="models-container">
+            <!-- 3Dモデル -->
+            <a-entity id="model1" gltf-model="#duck-model" position="0 0 -3" scale="0.5 0.5 0.5" visible="false"></a-entity>
+            <a-box id="model2" color="red" position="2 0 -3" scale="0.3 0.3 0.3" rotation="0 45 0" visible="false"></a-box>
+            <a-sphere id="model3" color="blue" position="-2 0 -3" scale="0.4 0.4 0.4" radius="1" visible="false"></a-sphere>
+        </a-entity>
+        
+        <!-- マーカーベースのAR（hiroマーカー） -->
+        <a-marker preset="hiro" id="hiro-marker">
+            <a-entity gltf-model="#duck-model" scale="0.5 0.5 0.5" position="0 0 0" rotation="0 0 0"></a-entity>
+        </a-marker>
+    </a-scene>
+
+    <script>
+        // ページの読み込みが完了したら実行
+        window.addEventListener('load', function() {
+            const scene = document.querySelector('a-scene');
+            const debugInfo = document.getElementById('debug-info');
+            const loadingMessage = document.getElementById('loading-message');
+            const models = document.querySelectorAll('#model1, #model2, #model3');
+            const startButton = document.getElementById('startButton');
+            const cameraPermissionUI = document.getElementById('camera-permission-ui');
+            
+            debugInfo.textContent = 'デバッグ情報: ページ読み込み完了';
+            
+            // AR.jsが読み込まれたときのイベント
+            scene.addEventListener('loaded', function() {
+                debugInfo.textContent = 'デバッグ情報: A-Frameシーン読み込み完了';
+                
+                // スタートボタンのイベントリスナー
+                startButton.addEventListener('click', function() {
+                    debugInfo.textContent = 'デバッグ情報: スタートボタンがクリックされました';
+                    
+                    // カメラアクセスを明示的に要求
+                    navigator.mediaDevices.getUserMedia({ video: true })
+                        .then(function(stream) {
+                            debugInfo.textContent = 'デバッグ情報: カメラアクセス許可';
+                            loadingMessage.textContent = 'カメラアクセス許可。ARを開始中...';
+                            
+                            // UIを非表示にする
+                            cameraPermissionUI.setAttribute('visible', 'false');
+                            
+                            // モデルを表示
+                            models.forEach(model => {
+                                model.setAttribute('visible', 'true');
+                            });
+                            
+                            // 少し待ってからメッセージを消す
+                            setTimeout(function() {
+                                loadingMessage.style.display = 'none';
+                            }, 3000);
+                        })
+                        .catch(function(err) {
+                            debugInfo.textContent = 'デバッグ情報: カメラエラー - ' + err.name;
+                            loadingMessage.textContent = 'カメラへのアクセスが拒否されました。ブラウザの設定でカメラへのアクセスを許可してください。';
+                            loadingMessage.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+                        });
+                });
+            });
+            
+            // AR.jsのカメラが読み込まれたときのイベント
+            scene.addEventListener('camera-init', function() {
+                debugInfo.textContent = 'デバッグ情報: AR.jsカメラ初期化';
+            });
+            
+            // AR.jsのエラーハンドリング
+            scene.addEventListener('camera-error', function(err) {
+                debugInfo.textContent = 'デバッグ情報: カメラエラー発生';
+                loadingMessage.textContent = 'カメラエラー: ' + (err.detail || 'Unknown error');
+                loadingMessage.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+            });
+        });
+    </script>
+</body>
+</html>
