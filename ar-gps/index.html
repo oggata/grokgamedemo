@@ -3,613 +3,702 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>改良版GPS対応AR Model Viewer</title>
-    <!-- A-Frame と AR.js の最新バージョンを使用 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
+    <title>動的位置追跡AR</title>
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    <script src="https://unpkg.com/aframe-look-at-component@1.0.0/dist/aframe-look-at-component.min.js"></script>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            font-family: Arial, sans-serif;
         }
-        #loading-message {
-            position: absolute;
-            top: 50%;
-            width: 100%;
-            text-align: center;
-            font-size: 18px;
-            color: white;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 10px 0;
-            z-index: 999;
-        }
-        #instructions {
-            position: absolute;
-            top: 10px;
-            width: 100%;
-            text-align: center;
-            color: white;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 10px 0;
-            z-index: 999;
-        }
-        #debug-info {
-            position: absolute;
-            top: 50px;
-            left: 10px;
-            color: white;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 5px;
-            font-size: 12px;
-            z-index: 999;
-            max-width: 80%;
-            word-wrap: break-word;
-        }
-        .ui-button {
-            padding: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
-            color: white;
-            border: none;
-            z-index: 999;
-            cursor: pointer;
-            margin: 5px;
-            border-radius: 5px;
-        }
-        #coordinates-panel {
+        
+        .ui-container {
             position: fixed;
             bottom: 0;
+            left: 0;
             width: 100%;
             background-color: rgba(0, 0, 0, 0.7);
             color: white;
             padding: 10px;
             z-index: 999;
-            display: flex;
-            flex-direction: column;
         }
-        .form-row {
+        
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        label {
+            color: white;
+            margin-right: 5px;
+        }
+        
+        input {
+            padding: 8px;
+            border-radius: 4px;
+            border: none;
+        }
+        
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .debug-info {
+            font-family: monospace;
+            font-size: 12px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            position: fixed;
+            top: 0;
+            left: 0;
+            padding: 10px;
+            z-index: 999;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        
+        .object-list {
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        
+        .object-item {
             display: flex;
             justify-content: space-between;
-            margin: 5px 0;
             align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
         }
-        .form-row input {
-            padding: 8px;
-            border: none;
-            border-radius: 3px;
-            width: 120px;
-            margin: 0 5px;
+        
+        .hidden {
+            display: none;
         }
-        .form-row label {
-            min-width: 120px;
+        
+        #status {
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: bold;
         }
-        .button-row {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 10px;
+        
+        .remove-btn {
+            background-color: #f44336;
+            padding: 5px 10px;
         }
-        #toggle-panel {
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            z-index: 1000;
-        }
-        .coordinate-display {
-            font-size: 12px;
-            margin-bottom: 5px;
-        }
-        #model-list {
-            margin-top: 10px;
-        }
-        select {
-            padding: 8px;
-            border: none;
-            border-radius: 3px;
-            width: 120px;
-        }
-        .form-row-small {
-            display: flex;
-            justify-content: flex-start;
-            margin: 5px 0;
-            align-items: center;
-        }
-        .form-row-small input {
+        
+        /* スイッチ用のスタイル */
+        .switch {
+            position: relative;
+            display: inline-block;
             width: 60px;
-            padding: 5px;
-            margin: 0 5px;
+            height: 34px;
         }
-        .form-row-small label {
-            min-width: 80px;
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(26px);
         }
     </style>
 </head>
 <body>
-    <div id="loading-message">ARエクスペリエンスを読み込み中...</div>
-    <div id="instructions">カメラを周囲に向けてGPS座標を設定してください</div>
-    <div id="debug-info">デバッグ情報: 初期化中...</div>
+    <!-- デバッグ情報表示 -->
+    <div id="debug-info" class="debug-info"></div>
     
-    <!-- ARコンテンツ用のA-Frameシーン -->
+    <!-- A-Frame シーン -->
     <a-scene 
-        vr-mode-ui="enabled: false"
-        arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
-        renderer="logarithmicDepthBuffer: true; precision: medium;"
-        embedded>
+        vr-mode-ui="enabled: false" 
+        embedded
+        arjs="sourceType: webcam; debugUIEnabled: false;">
         
-        <!-- アセット -->
-        <a-assets>
-            <a-asset-item id="duck-model" src="Duck.glb"></a-asset-item>
-        </a-assets>
-        
-        <!-- カメラとカーソル -->
-        <a-entity camera look-controls wasd-controls position="0 1.6 0">
-            <a-entity cursor="fuse: false; rayOrigin: mouse;"></a-entity>
-        </a-entity>
-        
-        <!-- GPSエンティティはスクリプトで動的に追加 -->
-        <a-entity id="gps-models-container"></a-entity>
+        <!-- カメラ -->
+        <a-entity camera="active: true" position="0 1.6 0" look-controls></a-entity>
     </a-scene>
-
-    <!-- 座標入力パネルのトグルボタン -->
-    <button id="toggle-panel" class="ui-button">座標パネル表示/非表示</button>
-
-    <!-- 座標入力パネル -->
-    <div id="coordinates-panel">
-        <div class="coordinate-display">
-            現在位置: <span id="current-lat">取得中...</span>, <span id="current-lng">取得中...</span>
+    
+    <!-- UI Container -->
+    <div class="ui-container">
+        <div id="status">準備中...</div>
+        
+        <div class="row">
+            <div>
+                <label for="lat">緯度:</label>
+                <input type="number" id="lat" step="0.000001" placeholder="35.681236">
+            </div>
+            
+            <div>
+                <label for="lng">経度:</label>
+                <input type="number" id="lng" step="0.000001" placeholder="139.767125">
+            </div>
+            
+            <div>
+                <label for="size">サイズ:</label>
+                <input type="range" id="size" min="1" max="30" value="10">
+                <span id="size-value">10</span>
+            </div>
         </div>
-        <div class="form-row">
-            <label for="target-lat">目標緯度:</label>
-            <input type="number" id="target-lat" step="0.00001" placeholder="緯度">
+        
+        <div class="row">
+            <button id="current-pos-btn">現在位置を取得</button>
+            <button id="place-obj-btn">オブジェクトを配置</button>
+            <button id="toggle-list-btn">オブジェクト一覧</button>
+            
+            <div style="display: flex; align-items: center;">
+                <label for="debug-toggle">デバッグ表示:</label>
+                <label class="switch">
+                    <input type="checkbox" id="debug-toggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
         </div>
-        <div class="form-row">
-            <label for="target-lng">目標経度:</label>
-            <input type="number" id="target-lng" step="0.00001" placeholder="経度">
-        </div>
-        <div class="form-row">
-            <label for="model-select">モデル選択:</label>
-            <select id="model-select">
-                <option value="duck">アヒル</option>
-                <option value="box">赤い箱</option>
-                <option value="sphere">青い球</option>
-            </select>
-        </div>
-        <div class="form-row-small">
-            <label for="distance-scale">距離係数:</label>
-            <input type="number" id="distance-scale" value="1" step="0.1" min="0.1">
-            <label for="model-height">高さ(m):</label>
-            <input type="number" id="model-height" value="0" step="0.5">
-        </div>
-        <div class="form-row-small">
-            <label for="model-size">サイズ:</label>
-            <input type="number" id="model-size" value="0.5" step="0.1" min="0.1">
-            <label for="use-relative">相対位置:</label>
-            <input type="checkbox" id="use-relative" checked>
-        </div>
-        <div class="button-row">
-            <button id="use-current-location" class="ui-button">現在位置を使用</button>
-            <button id="place-model" class="ui-button">モデルを配置</button>
-            <button id="clear-models" class="ui-button">全てクリア</button>
-        </div>
-        <div class="button-row">
-            <button id="place-nearby" class="ui-button">近くに配置(10m)</button>
-            <button id="place-test" class="ui-button">テスト配置</button>
-        </div>
-        <div id="model-list">
-            配置済みモデル: <span id="placed-models-count">0</span>
-        </div>
+        
+        <div id="object-list" class="object-list hidden"></div>
     </div>
-
+    
     <script>
-        // ページの読み込みが完了したら実行
-        window.addEventListener('load', function() {
-            const scene = document.querySelector('a-scene');
-            const debugInfo = document.getElementById('debug-info');
-            const loadingMessage = document.getElementById('loading-message');
-            const modelsContainer = document.getElementById('gps-models-container');
-            
-            // UI要素の参照
-            const currentLatSpan = document.getElementById('current-lat');
-            const currentLngSpan = document.getElementById('current-lng');
-            const targetLatInput = document.getElementById('target-lat');
-            const targetLngInput = document.getElementById('target-lng');
-            const modelSelect = document.getElementById('model-select');
-            const useCurrentLocationBtn = document.getElementById('use-current-location');
-            const placeModelBtn = document.getElementById('place-model');
-            const clearModelsBtn = document.getElementById('clear-models');
-            const togglePanelBtn = document.getElementById('toggle-panel');
-            const coordinatesPanel = document.getElementById('coordinates-panel');
-            const placedModelsCount = document.getElementById('placed-models-count');
-            const distanceScaleInput = document.getElementById('distance-scale');
-            const modelHeightInput = document.getElementById('model-height');
-            const modelSizeInput = document.getElementById('model-size');
-            const useRelativeCheckbox = document.getElementById('use-relative');
-            const placeNearbyBtn = document.getElementById('place-nearby');
-            const placeTestBtn = document.getElementById('place-test');
-            
-            // 配置済みモデルを追跡する配列
-            let placedModels = [];
-            
-            debugInfo.textContent = 'デバッグ情報: ページ読み込み完了';
-            
-            // 現在位置の追跡変数
-            let currentPosition = {
-                latitude: 0,
-                longitude: 0,
-                accuracy: 0
-            };
-            
-            // 座標パネルの表示/非表示トグル
-            togglePanelBtn.addEventListener('click', function() {
-                if (coordinatesPanel.style.display === 'none') {
-                    coordinatesPanel.style.display = 'flex';
-                } else {
-                    coordinatesPanel.style.display = 'none';
-                }
-            });
-            
-            // AR.jsが読み込まれたときのイベント
+        // 変数
+        let userPosition = null;           // ユーザーの現在位置（緯度経度）
+        let previousPosition = null;       // 前回のユーザー位置
+        let watchPositionId = null;        // 位置監視のID
+        let isTrackingEnabled = true;      // 位置追跡の有効/無効
+        let updateInterval = 100;          // 更新間隔を100ミリ秒に短縮
+        let lastUpdateTime = 0;            // 最終更新時刻
+        let objectCounter = 0;             // オブジェクトのカウンター
+        let objects = [];                  // 配置したオブジェクトの配列
+        let distanceThreshold = 0.1;       // 更新する最小距離を0.1メートルに変更
+        let isDebugMode = false;           // デバッグモード
+        let minAccuracy = 10;              // 最小精度（メートル）
+        let lastPositionUpdate = 0;        // 最後の位置更新時刻
+        
+        // DOM要素
+        const latInput = document.getElementById('lat');
+        const lngInput = document.getElementById('lng');
+        const sizeInput = document.getElementById('size');
+        const sizeValue = document.getElementById('size-value');
+        const currentPosBtn = document.getElementById('current-pos-btn');
+        const placeObjBtn = document.getElementById('place-obj-btn');
+        const toggleListBtn = document.getElementById('toggle-list-btn');
+        const objectList = document.getElementById('object-list');
+        const statusElement = document.getElementById('status');
+        const debugInfo = document.getElementById('debug-info');
+        const debugToggle = document.getElementById('debug-toggle');
+        
+        // シーンとカメラ
+        const scene = document.querySelector('a-scene');
+        
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            // A-Frameシーンがロードされたときの処理
             scene.addEventListener('loaded', function() {
-                debugInfo.textContent = 'デバッグ情報: A-Frameシーン読み込み完了';
+                updateStatus('カメラ初期化中...');
                 
-                // 位置情報の取得を開始
+                // カメラアクセスの確認
+                checkCameraAccess();
+                
+                // 位置情報の監視を開始
                 startLocationTracking();
-                
-                // 少し待ってからメッセージを消す
-                setTimeout(function() {
-                    loadingMessage.style.display = 'none';
-                }, 3000);
             });
             
-            // 位置情報の追跡を開始
-            function startLocationTracking() {
-                if ('geolocation' in navigator) {
-                    debugInfo.textContent = 'デバッグ情報: 位置情報サービスを利用可能';
-                    
-                    // 位置情報の監視を開始
-                    const watchId = navigator.geolocation.watchPosition(
-                        // 成功時のコールバック
-                        function(position) {
-                            currentPosition.latitude = position.coords.latitude;
-                            currentPosition.longitude = position.coords.longitude;
-                            currentPosition.accuracy = position.coords.accuracy;
-                            
-                            // UI更新
-                            currentLatSpan.textContent = position.coords.latitude.toFixed(6);
-                            currentLngSpan.textContent = position.coords.longitude.toFixed(6);
-                            
-                            debugInfo.textContent = `デバッグ情報: 位置更新 - ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}, 精度: ${position.coords.accuracy.toFixed(1)}m`;
-                            
-                            // すでに配置されたモデルの位置を更新（相対モードの場合）
-                            if (useRelativeCheckbox.checked) {
-                                updateAllModelsPositions();
-                            }
-                        },
-                        // エラー時のコールバック
-                        function(error) {
-                            debugInfo.textContent = `デバッグ情報: 位置情報エラー - ${error.message}`;
-                            alert(`位置情報の取得に失敗しました: ${error.message}`);
-                        },
-                        // オプション
-                        {
-                            enableHighAccuracy: true,
-                            maximumAge: 0,
-                            timeout: 27000
-                        }
-                    );
-                } else {
-                    debugInfo.textContent = 'デバッグ情報: 位置情報サービスを利用できません';
-                    alert('お使いのブラウザは位置情報をサポートしていません。');
-                }
-            }
-            
-            // 現在位置を使用ボタンの処理
-            useCurrentLocationBtn.addEventListener('click', function() {
-                targetLatInput.value = currentPosition.latitude;
-                targetLngInput.value = currentPosition.longitude;
-                debugInfo.textContent = 'デバッグ情報: 現在位置をターゲットにセット';
+            // サイズスライダーの値表示を更新
+            sizeInput.addEventListener('input', function() {
+                sizeValue.textContent = this.value;
             });
             
-            // モデル配置ボタンの処理
-            placeModelBtn.addEventListener('click', function() {
-                const targetLat = parseFloat(targetLatInput.value);
-                const targetLng = parseFloat(targetLngInput.value);
-                const selectedModel = modelSelect.value;
-                const modelHeight = parseFloat(modelHeightInput.value);
-                const modelSize = parseFloat(modelSizeInput.value);
+            // 現在位置を取得するボタン
+            currentPosBtn.addEventListener('click', function() {
+                updateStatus('位置情報を取得中...');
+                getCurrentPosition();
+            });
+            
+            // オブジェクト配置ボタン
+            placeObjBtn.addEventListener('click', function() {
+                const lat = parseFloat(latInput.value);
+                const lng = parseFloat(lngInput.value);
+                const size = parseInt(sizeInput.value);
                 
-                if (isNaN(targetLat) || isNaN(targetLng)) {
-                    alert('有効な緯度経度を入力してください');
+                if (isNaN(lat) || isNaN(lng)) {
+                    updateStatus('有効な緯度・経度を入力してください');
                     return;
                 }
                 
-                debugInfo.textContent = `デバッグ情報: モデル配置中 - ${targetLat}, ${targetLng}, タイプ: ${selectedModel}, 高さ: ${modelHeight}m, サイズ: ${modelSize}`;
+                if (!userPosition) {
+                    updateStatus('先に現在位置を取得してください');
+                    return;
+                }
                 
-                // モデルを配置
-                placeModel(targetLat, targetLng, selectedModel, modelHeight, modelSize);
+                placeObject(lat, lng, size);
             });
             
-            // 近くに配置ボタンの処理
-            placeNearbyBtn.addEventListener('click', function() {
-                // 現在位置から10m北に配置
-                const selectedModel = modelSelect.value;
-                const modelHeight = parseFloat(modelHeightInput.value);
-                const modelSize = parseFloat(modelSizeInput.value);
-                
-                // 緯度1度あたり約111km、10mは約0.00009度
-                const offsetLat = currentPosition.latitude + 0.00009;
-                const offsetLng = currentPosition.longitude;
-                
-                debugInfo.textContent = `デバッグ情報: 近くにモデル配置中 - ${offsetLat}, ${offsetLng}, タイプ: ${selectedModel}`;
-                
-                // モデルを配置
-                placeModel(offsetLat, offsetLng, selectedModel, modelHeight, modelSize);
+            // オブジェクトリスト表示/非表示ボタン
+            toggleListBtn.addEventListener('click', function() {
+                if (objectList.classList.contains('hidden')) {
+                    objectList.classList.remove('hidden');
+                    this.textContent = 'リストを隠す';
+                } else {
+                    objectList.classList.add('hidden');
+                    this.textContent = 'オブジェクト一覧';
+                }
             });
             
-            // テスト配置ボタンの処理
-            placeTestBtn.addEventListener('click', function() {
-                const selectedModel = modelSelect.value;
-                const modelHeight = parseFloat(modelHeightInput.value);
-                const modelSize = parseFloat(modelSizeInput.value);
-                
-                // 直接3D空間に配置（GPS座標変換なし）
-                placeDirectModel(selectedModel, modelHeight, modelSize);
+            // デバッグ表示の切り替え
+            debugToggle.addEventListener('change', function() {
+                isDebugMode = this.checked;
+                if (isDebugMode) {
+                    debugInfo.style.display = 'block';
+                } else {
+                    debugInfo.style.display = 'none';
+                }
             });
             
-            // 全モデルクリアボタンの処理
-            clearModelsBtn.addEventListener('click', function() {
-                // 全モデルを削除
-                while (placedModels.length > 0) {
-                    const modelData = placedModels.pop();
-                    modelsContainer.removeChild(modelData.entity);
-                }
-                
-                // カウンター更新
-                placedModelsCount.textContent = '0';
-                debugInfo.textContent = 'デバッグ情報: 全モデルをクリア';
-            });
+            // 初期状態はデバッグ表示OFF
+            debugInfo.style.display = 'none';
             
-            // GPS座標から3D位置を計算する関数
-            function calculatePositionFromGPS(targetLat, targetLng, currentLat, currentLng) {
-                // スケール係数を取得（ユーザー設定可能）
-                const scaleFactor = parseFloat(distanceScaleInput.value) || 1.0;
-                
-                // 緯度・経度の差分を計算（度）
-                const latDiff = targetLat - currentLat;
-                const lngDiff = targetLng - currentLng;
-                
-                // 緯度1度あたりの距離（メートル）≈ 111,319.9
-                // 経度1度あたりの距離（メートル）≈ 111,319.9 * cos(緯度)
-                const latDistance = latDiff * 111319.9 * scaleFactor;
-                const lngDistance = lngDiff * 111319.9 * Math.cos(currentLat * (Math.PI/180)) * scaleFactor;
-                
-                // デバッグログ
-                const debugMsg = `座標変換: 差分(${latDiff.toFixed(6)}, ${lngDiff.toFixed(6)}) => 距離(${latDistance.toFixed(2)}m, ${lngDistance.toFixed(2)}m)`;
-                console.log(debugMsg);
-                
-                // A-Frame座標系に変換（X: 東西, Z: 南北）
-                // 南がZ+、北がZ-、東がX+、西がX-
-                return {
-                    x: lngDistance,  // 経度の差 => X軸（東西）
-                    y: 0,            // 高さは別途設定
-                    z: -latDistance  // 緯度の差 => Z軸（南北）、北がマイナス
-                };
-            }
-            
-            // 指定座標にモデルを配置する関数
-            function placeModel(latitude, longitude, modelType, height = 0, size = 0.5) {
-                // 相対モードか絶対モードかをチェック
-                const isRelativeMode = useRelativeCheckbox.checked;
-                
-                // 新しいエンティティを作成
-                const entity = document.createElement('a-entity');
-                
-                // 共通の属性を設定
-                entity.setAttribute('look-at', '[camera]');
-                
-                // モデルタイプごとに異なる属性を設定
-                let modelName = '';
-                switch(modelType) {
-                    case 'duck':
-                        entity.setAttribute('gltf-model', '#duck-model');
-                        entity.setAttribute('scale', `${size} ${size} ${size}`);
-                        modelName = 'アヒル';
-                        break;
-                    case 'box':
-                        // 箱のジオメトリを追加
-                        const box = document.createElement('a-box');
-                        box.setAttribute('color', 'red');
-                        box.setAttribute('depth', '1');
-                        box.setAttribute('height', '1');
-                        box.setAttribute('width', '1');
-                        box.setAttribute('scale', `${size} ${size} ${size}`);
-                        entity.appendChild(box);
-                        modelName = '赤い箱';
-                        break;
-                    case 'sphere':
-                        // 球のジオメトリを追加
-                        const sphere = document.createElement('a-sphere');
-                        sphere.setAttribute('color', 'blue');
-                        sphere.setAttribute('radius', '0.5');
-                        sphere.setAttribute('scale', `${size} ${size} ${size}`);
-                        entity.appendChild(sphere);
-                        modelName = '青い球';
-                        break;
-                    default:
-                        console.error('Unknown model type:', modelType);
-                        return;
-                }
-                
-                // 座標を説明するテキストを追加
-                const text = document.createElement('a-text');
-                text.setAttribute('value', `${modelName} (${latitude.toFixed(6)}, ${longitude.toFixed(6)})`);
-                text.setAttribute('position', '0 1.5 0');
-                text.setAttribute('align', 'center');
-                text.setAttribute('color', 'white');
-                text.setAttribute('scale', '0.5 0.5 0.5');
-                entity.appendChild(text);
-                
-                // GPS座標から位置を計算
-                const position = calculatePositionFromGPS(
-                    latitude, 
-                    longitude, 
-                    isRelativeMode ? currentPosition.latitude : 0, 
-                    isRelativeMode ? currentPosition.longitude : 0
-                );
-                
-                // 高さを設定
-                position.y = height;
-                
-                // 位置を設定
-                entity.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
-                
-                // モデルコンテナに追加
-                modelsContainer.appendChild(entity);
-                
-                // 配置済みモデルリストに追加（位置情報も保存）
-                placedModels.push({
-                    entity: entity,
-                    latitude: latitude,
-                    longitude: longitude,
-                    height: height,
-                    size: size,
-                    modelType: modelType
-                });
-                
-                // UIを更新
-                placedModelsCount.textContent = placedModels.length;
-                
-                debugInfo.textContent = `モデルを配置しました - ${modelName} at ${latitude}, ${longitude} => 3D位置(${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`;
-            }
-            
-            // 直接3D空間にモデルを配置する関数（テスト用）
-            function placeDirectModel(modelType, height = 0, size = 0.5) {
-                // 新しいエンティティを作成
-                const entity = document.createElement('a-entity');
-                
-                // 共通の属性を設定
-                entity.setAttribute('look-at', '[camera]');
-                
-                // モデルタイプごとに異なる属性を設定
-                let modelName = '';
-                switch(modelType) {
-                    case 'duck':
-                        entity.setAttribute('gltf-model', '#duck-model');
-                        entity.setAttribute('scale', `${size} ${size} ${size}`);
-                        modelName = 'アヒル';
-                        break;
-                    case 'box':
-                        // 箱のジオメトリを追加
-                        const box = document.createElement('a-box');
-                        box.setAttribute('color', 'red');
-                        box.setAttribute('depth', '1');
-                        box.setAttribute('height', '1');
-                        box.setAttribute('width', '1');
-                        box.setAttribute('scale', `${size} ${size} ${size}`);
-                        entity.appendChild(box);
-                        modelName = '赤い箱';
-                        break;
-                    case 'sphere':
-                        // 球のジオメトリを追加
-                        const sphere = document.createElement('a-sphere');
-                        sphere.setAttribute('color', 'blue');
-                        sphere.setAttribute('radius', '0.5');
-                        sphere.setAttribute('scale', `${size} ${size} ${size}`);
-                        entity.appendChild(sphere);
-                        modelName = '青い球';
-                        break;
-                    default:
-                        console.error('Unknown model type:', modelType);
-                        return;
-                }
-                
-                // テスト用の位置を設定（カメラの正面）
-                entity.setAttribute('position', `0 ${height} -3`);
-                
-                // 座標を説明するテキストを追加
-                const text = document.createElement('a-text');
-                text.setAttribute('value', `${modelName} (テスト配置)`);
-                text.setAttribute('position', '0 1.5 0');
-                text.setAttribute('align', 'center');
-                text.setAttribute('color', 'white');
-                text.setAttribute('scale', '0.5 0.5 0.5');
-                entity.appendChild(text);
-                
-                // モデルコンテナに追加
-                modelsContainer.appendChild(entity);
-                
-                // 配置済みモデルリストに追加
-                placedModels.push({
-                    entity: entity,
-                    latitude: null,  // テスト配置なのでGPS座標なし
-                    longitude: null,
-                    height: height,
-                    size: size,
-                    modelType: modelType
-                });
-                
-                // UIを更新
-                placedModelsCount.textContent = placedModels.length;
-                
-                debugInfo.textContent = `テストモデルを配置しました - ${modelName} at 3D位置(0, ${height}, -3)`;
-            }
-            
-            // すべてのモデルの位置を更新する関数（現在位置が変化したとき）
-            function updateAllModelsPositions() {
-                placedModels.forEach(function(modelData) {
-                    // GPS座標がない場合（テスト配置の場合）は更新しない
-                    if (modelData.latitude === null || modelData.longitude === null) {
-                        return;
-                    }
-                    
-                    // GPS座標から新しい位置を計算
-                    const position = calculatePositionFromGPS(
-                        modelData.latitude,
-                        modelData.longitude,
-                        currentPosition.latitude,
-                        currentPosition.longitude
-                    );
-                    
-                    // 高さを設定
-                    position.y = modelData.height;
-                    
-                    // 位置を更新
-                    modelData.entity.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
-                });
-            }
-            
-            // ブラウザのGPSアクセス許可要求を表示
-            function requestGeolocationPermission() {
-                if ('geolocation' in navigator) {
-                    navigator.geolocation.getCurrentPosition(function(position) {
-                        // 許可された場合の処理
-                        debugInfo.textContent = 'デバッグ情報: 位置情報へのアクセスが許可されました';
-                    }, function(error) {
-                        // 拒否された場合の処理
-                        debugInfo.textContent = `デバッグ情報: 位置情報へのアクセスが拒否されました - ${error.message}`;
-                        alert('ARでの位置情報の利用が拒否されました。設定を確認してください。');
-                    }, {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    });
-                }
-            }
-            
-            // 初期化時に位置情報へのアクセス許可を要求
-            requestGeolocationPermission();
-            
-            // デバッグ情報の表示タイマー
-            setInterval(function() {
-                if (placedModels.length > 0) {
-                    const lastModel = placedModels[placedModels.length - 1];
-                    if (lastModel.latitude && lastModel.longitude) {
-                        const position = lastModel.entity.getAttribute('position');
-                        debugInfo.textContent += `\n最後のモデル: GPS(${lastModel.latitude.toFixed(6)}, ${lastModel.longitude.toFixed(6)}) => 3D(${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`;
-                    }
-                }
-            }, 5000);
+            // 定期的な位置更新処理
+            setInterval(updateObjectPositions, updateInterval);
         });
+        
+        // カメラアクセスの確認
+        function checkCameraAccess() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    updateStatus('カメラアクセス成功 - 位置情報を取得中...');
+                    
+                    // ストリームを停止（A-Frameが自身でカメラを制御するため）
+                    stream.getTracks().forEach(track => track.stop());
+                })
+                .catch(err => {
+                    console.error('カメラアクセスエラー:', err);
+                    updateStatus('カメラアクセス失敗: ' + err.message);
+                });
+        }
+        
+        // ステータスメッセージの更新
+        function updateStatus(message) {
+            statusElement.textContent = message;
+            console.log(message);
+        }
+        
+        // デバッグ情報の更新
+        function updateDebugInfo() {
+            if (!isDebugMode) return;
+            
+            let info = '';
+            
+            if (userPosition) {
+                info += `現在位置: 緯度=${userPosition.latitude.toFixed(6)}, 経度=${userPosition.longitude.toFixed(6)}<br>`;
+                info += `精度: ${userPosition.accuracy.toFixed(1)}m<br>`;
+                info += `更新時刻: ${new Date(userPosition.timestamp).toLocaleTimeString()}<br>`;
+                
+                if (previousPosition) {
+                    const distance = calculateDistance(
+                        previousPosition.latitude, previousPosition.longitude,
+                        userPosition.latitude, userPosition.longitude
+                    );
+                    info += `前回位置からの距離: ${distance.toFixed(2)}m<br>`;
+                    info += `前回位置: 緯度=${previousPosition.latitude.toFixed(6)}, 経度=${previousPosition.longitude.toFixed(6)}<br>`;
+                }
+            } else {
+                info += '位置情報: 取得中...<br>';
+            }
+            
+            info += `配置済みオブジェクト数: ${objects.length}<br>`;
+            info += `最終更新時刻: ${new Date(lastUpdateTime).toLocaleTimeString()}<br>`;
+            
+            if (objects.length > 0) {
+                info += '<br>オブジェクト情報:<br>';
+                objects.forEach(obj => {
+                    if (userPosition) {
+                        const distance = calculateDistance(
+                            userPosition.latitude, userPosition.longitude,
+                            obj.latitude, obj.longitude
+                        );
+                        info += `ID:${obj.id} - 距離:${distance.toFixed(2)}m - `;
+                    }
+                    
+                    const pos = obj.element.getAttribute('position');
+                    info += `位置(x=${pos.x.toFixed(2)}, y=${pos.y.toFixed(2)}, z=${pos.z.toFixed(2)})<br>`;
+                });
+            }
+            
+            debugInfo.innerHTML = info;
+        }
+        
+        // 位置情報の監視を開始
+        function startLocationTracking() {
+            if (!navigator.geolocation) {
+                updateStatus('お使いのブラウザは位置情報をサポートしていません');
+                return;
+            }
+            
+            // 既存の監視があれば停止
+            if (watchPositionId !== null) {
+                navigator.geolocation.clearWatch(watchPositionId);
+            }
+            
+            // 位置情報の変更を継続的に監視
+            watchPositionId = navigator.geolocation.watchPosition(
+                position => {
+                    // 前回の位置を保存
+                    if (userPosition) {
+                        previousPosition = {
+                            latitude: userPosition.latitude,
+                            longitude: userPosition.longitude
+                        };
+                    }
+                    
+                    // 新しい位置を設定
+                    updateUserPosition(position);
+                    
+                    // オブジェクトの位置を更新
+                    updateObjectPositions();
+                },
+                error => {
+                    console.error('位置情報監視エラー:', error);
+                    updateStatus('位置情報の監視中にエラーが発生しました: ' + error.message);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 30000,  // タイムアウトを30秒に延長
+                    maximumAge: 0
+                }
+            );
+        }
+        
+        // ユーザー位置の更新
+        function updateUserPosition(position) {
+            const now = Date.now();
+            
+            // 更新間隔を制限（過負荷防止）
+            if (now - lastPositionUpdate < updateInterval) {
+                console.log('更新間隔が短すぎるため、スキップします');
+                return;
+            }
+            
+            // 精度が不十分な場合は更新しない
+            if (position.coords.accuracy > minAccuracy) {
+                console.log('位置情報の精度が不十分です:', position.coords.accuracy, 'm');
+                return;
+            }
+            
+            // 前回の位置を保存
+            if (userPosition) {
+                previousPosition = {
+                    latitude: userPosition.latitude,
+                    longitude: userPosition.longitude
+                };
+                console.log('位置情報を更新:', 
+                    `前回(${previousPosition.latitude.toFixed(6)}, ${previousPosition.longitude.toFixed(6)}) → `,
+                    `現在(${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)})`
+                );
+            }
+            
+            // 新しい位置を設定
+            userPosition = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                altitude: position.coords.altitude || 0,
+                timestamp: now
+            };
+            
+            lastPositionUpdate = now;
+            
+            // デバッグ情報を更新
+            updateDebugInfo();
+            
+            // オブジェクトの位置を更新
+            updateObjectPositions();
+        }
+        
+        // 現在位置を取得して入力欄に設定
+        function getCurrentPosition() {
+            if (!navigator.geolocation) {
+                updateStatus('お使いのブラウザは位置情報をサポートしていません');
+                return;
+            }
+            
+            // 既存の位置監視を一時停止
+            if (watchPositionId !== null) {
+                navigator.geolocation.clearWatch(watchPositionId);
+                watchPositionId = null;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    // 入力欄に設定
+                    latInput.value = lat;
+                    lngInput.value = lng;
+                    
+                    // ユーザー位置の更新
+                    updateUserPosition(position);
+                    
+                    // 位置監視を再開
+                    startLocationTracking();
+                    
+                    updateStatus(`現在位置を取得しました: 緯度=${lat.toFixed(6)}, 経度=${lng.toFixed(6)}`);
+                },
+                error => {
+                    console.error('位置情報エラー:', error);
+                    updateStatus('位置情報の取得に失敗しました: ' + error.message);
+                    
+                    // エラー後も位置監視を再開
+                    startLocationTracking();
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 30000,  // タイムアウトを30秒に延長
+                    maximumAge: 0
+                }
+            );
+        }
+        
+        // オブジェクトを配置
+        function placeObject(latitude, longitude, size) {
+            if (!userPosition) {
+                updateStatus('現在位置が不明です。先に位置情報を取得してください');
+                return;
+            }
+            
+            objectCounter++;
+            
+            // ランダムな色を選択
+            const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'cyan', 'magenta', 'orange'];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            
+            // 形状をランダムに選択
+            const shapes = ['box', 'sphere', 'cylinder', 'cone', 'torus'];
+            const shape = shapes[Math.floor(Math.random() * shapes.length)];
+            
+            // 位置を計算
+            const position = calculateLocalPosition(latitude, longitude);
+            
+            // オブジェクトを作成
+            const entity = document.createElement(`a-${shape}`);
+            entity.setAttribute('id', `object-${objectCounter}`);
+            entity.setAttribute('material', `color: ${color}; transparent: true; opacity: 0.9`);
+            entity.setAttribute('position', `${position.x} 1.5 ${position.z}`);
+            entity.setAttribute('scale', `${size/10} ${size/10} ${size/10}`);
+            entity.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 15000; easing: linear');
+            
+            // シーンに追加
+            scene.appendChild(entity);
+            
+            // オブジェクト情報を保存
+            const objectInfo = {
+                id: objectCounter,
+                element: entity,
+                latitude: latitude,
+                longitude: longitude,
+                color: color,
+                shape: shape,
+                size: size
+            };
+            
+            objects.push(objectInfo);
+            
+            // リストとデバッグ情報を更新
+            updateObjectList();
+            updateDebugInfo();
+            
+            updateStatus(`オブジェクト #${objectCounter} を配置しました`);
+        }
+        
+        // すべてのオブジェクトの位置を更新
+        function updateObjectPositions() {
+            const now = Date.now();
+            
+            // 更新間隔を制限（過負荷防止）
+            if (now - lastUpdateTime < updateInterval) {
+                return;
+            }
+            
+            lastUpdateTime = now;
+            
+            if (!userPosition || objects.length === 0) {
+                return;
+            }
+            
+            // 各オブジェクトの位置を更新
+            objects.forEach(obj => {
+                const position = calculateLocalPosition(obj.latitude, obj.longitude);
+                obj.element.setAttribute('position', `${position.x} 1.5 ${position.z}`);
+            });
+            
+            // デバッグ情報を更新
+            updateDebugInfo();
+            
+            // オブジェクトリストも更新
+            updateObjectList();
+        }
+        
+        // GPS座標からローカル座標に変換
+        function calculateLocalPosition(targetLat, targetLng) {
+            if (!userPosition) return { x: 0, z: 0 };
+            
+            // 地球の半径（メートル）
+            const EARTH_RADIUS = 6371000;
+            
+            // 緯度経度をラジアンに変換
+            const lat1 = toRadians(userPosition.latitude);
+            const lon1 = toRadians(userPosition.longitude);
+            const lat2 = toRadians(targetLat);
+            const lon2 = toRadians(targetLng);
+            
+            // 差分を計算
+            const dLat = lat2 - lat1;
+            const dLon = lon2 - lon1;
+            
+            // ハーバーサイン公式で距離を計算
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1) * Math.cos(lat2) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const distance = EARTH_RADIUS * c;
+            
+            // 方位角を計算
+            const y = Math.sin(dLon) * Math.cos(lat2);
+            const x = Math.cos(lat1) * Math.sin(lat2) -
+                    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+            const bearing = Math.atan2(y, x);
+            
+            // スケーリング係数（大きいほどオブジェクトが近くに表示される）
+            const scale = 0.2;
+            
+            // 3D座標に変換（A-Frameではz軸が奥行き、北方向がマイナス）
+            return {
+                x: distance * Math.sin(bearing) * scale,
+                z: -distance * Math.cos(bearing) * scale
+            };
+        }
+        
+        // 2点間の距離をメートルで計算（ハーバーサイン公式）
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // 地球の半径（メートル）
+            const dLat = toRadians(lat2 - lat1);
+            const dLon = toRadians(lon2 - lon1);
+            
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        // 度からラジアンに変換
+        function toRadians(degrees) {
+            return degrees * Math.PI / 180;
+        }
+        
+        // オブジェクトリストを更新
+        function updateObjectList() {
+            objectList.innerHTML = '<h3 style="margin: 5px 0;">配置したオブジェクト</h3>';
+            
+            if (objects.length === 0) {
+                objectList.innerHTML += '<p>オブジェクトはまだ配置されていません</p>';
+                return;
+            }
+            
+            objects.forEach(obj => {
+                const item = document.createElement('div');
+                item.className = 'object-item';
+                
+                let distance = '不明';
+                if (userPosition) {
+                    const dist = calculateDistance(
+                        userPosition.latitude, userPosition.longitude,
+                        obj.latitude, obj.longitude
+                    );
+                    distance = `${dist.toFixed(1)}m`;
+                }
+                
+                item.innerHTML = `
+                    <span style="color: ${obj.color}">
+                        #${obj.id}: ${obj.shape} (サイズ: ${obj.size}) - 距離: ${distance}
+                    </span>
+                    <button class="remove-btn" data-id="${obj.id}">削除</button>
+                `;
+                
+                objectList.appendChild(item);
+                
+                // 削除ボタンにイベントリスナーを追加
+                const removeBtn = item.querySelector('.remove-btn');
+                removeBtn.addEventListener('click', function() {
+                    const objId = parseInt(this.getAttribute('data-id'));
+                    removeObject(objId);
+                });
+            });
+            
+            // リストを表示状態にする
+            if (objects.length > 0 && objectList.classList.contains('hidden')) {
+                objectList.classList.remove('hidden');
+                toggleListBtn.textContent = 'リストを隠す';
+            }
+        }
+        
+        // オブジェクトを削除
+        function removeObject(id) {
+            const index = objects.findIndex(obj => obj.id === id);
+            
+            if (index !== -1) {
+                // DOMから要素を削除
+                scene.removeChild(objects[index].element);
+                
+                // リストから削除
+                objects.splice(index, 1);
+                
+                // リストとデバッグ情報を更新
+                updateObjectList();
+                updateDebugInfo();
+                
+                updateStatus(`オブジェクト #${id} を削除しました`);
+            }
+        }
     </script>
 </body>
 </html>
