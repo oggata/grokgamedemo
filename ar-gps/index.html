@@ -204,13 +204,13 @@
         let previousPosition = null;       // 前回のユーザー位置
         let watchPositionId = null;        // 位置監視のID
         let isTrackingEnabled = true;      // 位置追跡の有効/無効
-        let updateInterval = 100;          // 更新間隔を100ミリ秒に短縮
+        let updateInterval = 500;          // 更新間隔を500ミリ秒に変更
         let lastUpdateTime = 0;            // 最終更新時刻
         let objectCounter = 0;             // オブジェクトのカウンター
         let objects = [];                  // 配置したオブジェクトの配列
         let distanceThreshold = 0.1;       // 更新する最小距離を0.1メートルに変更
         let isDebugMode = false;           // デバッグモード
-        let minAccuracy = 10;              // 最小精度（メートル）
+        let minAccuracy = 50;              // 最小精度を50メートルに緩和
         let lastPositionUpdate = 0;        // 最後の位置更新時刻
         
         // DOM要素
@@ -417,8 +417,8 @@
                 return;
             }
             
-            // 精度が不十分な場合は更新しない
-            if (position.coords.accuracy > minAccuracy) {
+            // 精度が不十分な場合でも、最初の位置情報は受け入れる
+            if (position.coords.accuracy > minAccuracy && userPosition !== null) {
                 console.log('位置情報の精度が不十分です:', position.coords.accuracy, 'm');
                 return;
             }
