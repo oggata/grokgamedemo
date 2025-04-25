@@ -3,183 +3,162 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Location Based AR with AR.js</title>
+    <title>AR Model Viewer</title>
+    <!-- A-Frame と AR.js の最新バージョンを使用 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ar.js/2.3.1/aframe-ar.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe-extras/6.1.1/aframe-extras.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <style>
-        #ui-container {
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #loading-message {
+            position: absolute;
+            top: 50%;
+            width: 100%;
+            text-align: center;
+            font-size: 18px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 0;
+            z-index: 999;
+        }
+        #instructions {
             position: absolute;
             top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 0;
+            z-index: 999;
+        }
+        #debug-info {
+            position: absolute;
+            bottom: 10px;
             left: 10px;
-            z-index: 1000;
-            background: rgba(255, 255, 255, 0.8);
-            padding: 10px;
-            border-radius: 5px;
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            font-size: 12px;
+            z-index: 999;
         }
-        
-        input, button {
+        .ui-button {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
             padding: 10px;
-            margin: 5px 0;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        
-        button {
-            background-color: #4CAF50;
+            background-color: rgba(0, 0, 0, 0.5);
             color: white;
             border: none;
+            z-index: 999;
             cursor: pointer;
-        }
-        
-        button:hover {
-            background-color: #45a049;
-        }
-
-        #status {
-            margin-top: 10px;
-            color: #333;
-        }
-
-        .current-location {
-            margin-top: 5px;
-            font-size: 0.8em;
-            color: #666;
         }
     </style>
 </head>
-<body style="margin: 0; overflow: hidden;">
-    <div id="ui-container">
-        <h3>Location Based AR</h3>
-        <div>
-            <label for="latitude">緯度 (Latitude):</label>
-            <input type="number" id="latitude" step="0.000001" placeholder="35.681236">
-        </div>
-        <div>
-            <label for="longitude">経度 (Longitude):</label>
-            <input type="number" id="longitude" step="0.000001" placeholder="139.767125">
-        </div>
-        <button id="go-button">GO</button>
-        <button id="use-current-location">現在地を使用</button>
-        <div id="status">座標を入力して GOボタンを押してください</div>
-        <div class="current-location" id="current-location-display"></div>
-    </div>
+<body>
+    <div id="loading-message">ARエクスペリエンスを読み込み中...</div>
+    <div id="instructions">平らな面にカメラを向けてください</div>
+    <div id="debug-info">デバッグ情報: 初期化中...</div>
+    <button id="hide-button" class="ui-button" onclick="document.getElementById('instructions').style.display = 'none';">指示を非表示</button>
 
     <a-scene 
         vr-mode-ui="enabled: false"
-        embedded
-        arjs="sourceType: webcam; debugUIEnabled: false; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960;"
-    >
-        <a-assets>
-            <a-asset-item id="model" src="./Duck.glb"></a-asset-item>
-        </a-assets>
+        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; patternRatio: 0.8;"
+        renderer="logarithmicDepthBuffer: true; precision: medium;"
+        embedded>
+        
+        <!-- カメラへのアクセスを取得する前にユーザーが操作できるようにする -->
+        <a-entity id="camera-permission-ui" position="0 0 -5">
+            <a-box position="0 0 0" color="red" id="startButton" depth="1" height="1" width="1" 
+                  animation="property: rotation; to: 0 360 0; dur: 2000; easing: linear; loop: true">
+            </a-box>
+            <a-text position="0 1.2 0" value="タップしてARを開始" align="center" color="white" scale="1 1 1"></a-text>
+        </a-entity>
 
-        <a-camera gps-projected-camera rotation-reader></a-camera>
+        <!-- アセット -->
+        <a-assets>
+            <a-asset-item id="duck-model" src="https://cdn.jsdelivr.net/gh/aframevr/assets@latest/gltfs/duck/Duck.gltf"></a-asset-item>
+        </a-assets>
+        
+        <!-- カメラとカーソル -->
+        <a-entity camera look-controls wasd-controls position="0 1.6 0">
+            <a-entity cursor="fuse: false; rayOrigin: mouse;"></a-entity>
+        </a-entity>
+        
+        <!-- マーカーなしでも表示できるようにする -->
+        <a-entity id="models-container">
+            <!-- 3Dモデル -->
+            <a-entity id="model1" gltf-model="#duck-model" position="0 0 -3" scale="0.5 0.5 0.5" visible="false"></a-entity>
+            <a-box id="model2" color="red" position="2 0 -3" scale="0.3 0.3 0.3" rotation="0 45 0" visible="false"></a-box>
+            <a-sphere id="model3" color="blue" position="-2 0 -3" scale="0.4 0.4 0.4" radius="1" visible="false"></a-sphere>
+        </a-entity>
+        
+        <!-- マーカーベースのAR（hiroマーカー） -->
+        <a-marker preset="hiro" id="hiro-marker">
+            <a-entity gltf-model="#duck-model" scale="0.5 0.5 0.5" position="0 0 0" rotation="0 0 0"></a-entity>
+        </a-marker>
     </a-scene>
 
     <script>
-        // Global variables
-        let model = null;
-        const modelScale = 0.5; // Adjust scale as needed
-        
-        // DOM elements
-        const latInput = document.getElementById('latitude');
-        const longInput = document.getElementById('longitude');
-        const goButton = document.getElementById('go-button');
-        const useCurrentLocationButton = document.getElementById('use-current-location');
-        const statusDiv = document.getElementById('status');
-        const currentLocationDisplay = document.getElementById('current-location-display');
-        
-        // Update status message
-        function updateStatus(message) {
-            statusDiv.textContent = message;
-        }
-        
-        // Get user's current location
-        function getCurrentLocation() {
-            updateStatus('現在地を取得中...');
+        // ページの読み込みが完了したら実行
+        window.addEventListener('load', function() {
+            const scene = document.querySelector('a-scene');
+            const debugInfo = document.getElementById('debug-info');
+            const loadingMessage = document.getElementById('loading-message');
+            const models = document.querySelectorAll('#model1, #model2, #model3');
+            const startButton = document.getElementById('startButton');
+            const cameraPermissionUI = document.getElementById('camera-permission-ui');
             
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const lat = position.coords.latitude;
-                        const lng = position.coords.longitude;
-                        
-                        latInput.value = lat;
-                        longInput.value = lng;
-                        
-                        currentLocationDisplay.textContent = `現在地: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-                        updateStatus('現在地を取得しました。GOを押して3Dモデルを配置してください。');
-                    },
-                    (error) => {
-                        console.error('Geolocation error:', error);
-                        updateStatus('位置情報の取得に失敗しました。手動で座標を入力してください。');
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-            } else {
-                updateStatus('お使いのブラウザは位置情報をサポートしていません。手動で座標を入力してください。');
-            }
-        }
-        
-        // Create and place 3D model at specified location
-        function placeModel(lat, lng) {
-            // Remove previous model if exists
-            if (model) {
-                model.parentNode.removeChild(model);
-            }
+            debugInfo.textContent = 'デバッグ情報: ページ読み込み完了';
             
-            // Create new entity for the model
-            model = document.createElement('a-entity');
-            model.setAttribute('gltf-model', '#model');
-            model.setAttribute('scale', `${modelScale} ${modelScale} ${modelScale}`);
-            model.setAttribute('animation-mixer', '');
-            model.setAttribute('gps-projected-entity-place', {
-                latitude: lat,
-                longitude: lng
+            // AR.jsが読み込まれたときのイベント
+            scene.addEventListener('loaded', function() {
+                debugInfo.textContent = 'デバッグ情報: A-Frameシーン読み込み完了';
+                
+                // スタートボタンのイベントリスナー
+                startButton.addEventListener('click', function() {
+                    debugInfo.textContent = 'デバッグ情報: スタートボタンがクリックされました';
+                    
+                    // カメラアクセスを明示的に要求
+                    navigator.mediaDevices.getUserMedia({ video: true })
+                        .then(function(stream) {
+                            debugInfo.textContent = 'デバッグ情報: カメラアクセス許可';
+                            loadingMessage.textContent = 'カメラアクセス許可。ARを開始中...';
+                            
+                            // UIを非表示にする
+                            cameraPermissionUI.setAttribute('visible', 'false');
+                            
+                            // モデルを表示
+                            models.forEach(model => {
+                                model.setAttribute('visible', 'true');
+                            });
+                            
+                            // 少し待ってからメッセージを消す
+                            setTimeout(function() {
+                                loadingMessage.style.display = 'none';
+                            }, 3000);
+                        })
+                        .catch(function(err) {
+                            debugInfo.textContent = 'デバッグ情報: カメラエラー - ' + err.name;
+                            loadingMessage.textContent = 'カメラへのアクセスが拒否されました。ブラウザの設定でカメラへのアクセスを許可してください。';
+                            loadingMessage.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+                        });
+                });
             });
             
-            // Add model to scene
-            document.querySelector('a-scene').appendChild(model);
-            
-            updateStatus(`3Dモデルを配置しました: 緯度=${lat.toFixed(6)}, 経度=${lng.toFixed(6)}`);
-        }
-        
-        // Handle GO button click
-        goButton.addEventListener('click', () => {
-            const lat = parseFloat(latInput.value);
-            const lng = parseFloat(longInput.value);
-            
-            if (isNaN(lat) || isNaN(lng)) {
-                updateStatus('有効な座標を入力してください');
-                return;
-            }
-            
-            placeModel(lat, lng);
-        });
-        
-        // Handle Use Current Location button click
-        useCurrentLocationButton.addEventListener('click', getCurrentLocation);
-        
-        // Initialize with detecting current location
-        document.addEventListener('DOMContentLoaded', () => {
-            // Wait for AR.js to initialize
-            document.querySelector('a-scene').addEventListener('loaded', () => {
-                updateStatus('ARが初期化されました。座標を入力するか現在地を取得してください。');
+            // AR.jsのカメラが読み込まれたときのイベント
+            scene.addEventListener('camera-init', function() {
+                debugInfo.textContent = 'デバッグ情報: AR.jsカメラ初期化';
             });
-        });
-
-        // Handle AR.js errors
-        window.addEventListener('camera-error', () => {
-            updateStatus('カメラへのアクセスに失敗しました。カメラへのアクセス許可を確認してください。');
+            
+            // AR.jsのエラーハンドリング
+            scene.addEventListener('camera-error', function(err) {
+                debugInfo.textContent = 'デバッグ情報: カメラエラー発生';
+                loadingMessage.textContent = 'カメラエラー: ' + (err.detail || 'Unknown error');
+                loadingMessage.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+            });
         });
     </script>
 </body>
