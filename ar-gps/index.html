@@ -607,13 +607,15 @@
                     Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
             const bearing = Math.atan2(y, x);
             
-            // スケーリング係数（大きいほどオブジェクトが近くに表示される）
-            const scale = 0.2;
+            // 距離に応じてスケーリング係数を調整
+            // 近距離（100m以内）は大きく、遠距離（1km以上）は小さく表示
+            const baseScale = 0.2;
+            const distanceScale = Math.max(0.05, Math.min(0.5, baseScale * (100 / Math.max(100, distance))));
             
             // 3D座標に変換（A-Frameではz軸が奥行き、北方向がマイナス）
             return {
-                x: distance * Math.sin(bearing) * scale,
-                z: -distance * Math.cos(bearing) * scale
+                x: distance * Math.sin(bearing) * distanceScale,
+                z: -distance * Math.cos(bearing) * distanceScale
             };
         }
         
